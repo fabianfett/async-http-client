@@ -55,6 +55,7 @@ let package = Package(
                 .product(name: "NIOTestUtils", package: "swift-nio"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "NIOSOCKS", package: "swift-nio-extras"),
+                .product(name: "NIOExtras", package: "swift-nio-extras"),
             ]
         ),
     ]

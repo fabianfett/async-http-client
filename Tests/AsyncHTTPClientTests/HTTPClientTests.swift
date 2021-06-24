@@ -65,13 +65,13 @@ class HTTPClientTests: XCTestCase {
             self.defaultClient = nil
         }
 
-        XCTAssertNotNil(self.defaultHTTPBin)
-        XCTAssertNoThrow(try self.defaultHTTPBin.shutdown())
-        self.defaultHTTPBin = nil
-
         XCTAssertNotNil(self.clientGroup)
         XCTAssertNoThrow(try self.clientGroup.syncShutdownGracefully())
         self.clientGroup = nil
+        
+        XCTAssertNotNil(self.defaultHTTPBin)
+        XCTAssertNoThrow(try self.defaultHTTPBin.shutdown())
+        self.defaultHTTPBin = nil
 
         XCTAssertNotNil(self.serverGroup)
         XCTAssertNoThrow(try self.serverGroup.syncShutdownGracefully())

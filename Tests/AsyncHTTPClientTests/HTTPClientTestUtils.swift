@@ -16,6 +16,7 @@ import AsyncHTTPClient
 import Foundation
 import Logging
 import NIO
+import NIOExtras
 import NIOConcurrencyHelpers
 import NIOHTTP1
 import NIOHTTP2
@@ -321,6 +322,7 @@ internal final class HTTPBin<RequestHandler: ChannelInboundHandler> where
     private let mode: Mode
     private let sslContext: NIOSSLContext?
     private var serverChannel: Channel!
+    private let serverQuiesce: ServerQuiescingHelper
     private let isShutdown: NIOAtomic<Bool> = .makeAtomic(value: false)
     private let handlerFactory: (Int) -> (RequestHandler)
 
@@ -332,6 +334,7 @@ internal final class HTTPBin<RequestHandler: ChannelInboundHandler> where
     ) {
         self.mode = mode
         self.sslContext = HTTPBin.sslContext(for: mode)
+        self.serverQuiesce = ServerQuiescingHelper(group: self.group)
         self.handlerFactory = handlerFactory
 
         let socketAddress: SocketAddress
@@ -350,7 +353,14 @@ internal final class HTTPBin<RequestHandler: ChannelInboundHandler> where
         self.serverChannel = try! ServerBootstrap(group: self.group)
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .serverChannelInitializer { channel in
-                channel.pipeline.addHandler(activeConnCounterHandler)
+                do {
+                    let sync = channel.pipeline.syncOperations
+                    try sync.addHandler(self.serverQuiesce.makeServerChannelHandler(channel: channel))
+                    try sync.addHandler(activeConnCounterHandler)
+                    return channel.eventLoop.makeSucceededVoidFuture()
+                } catch {
+                    return channel.eventLoop.makeFailedFuture(error)
+                }
             }.childChannelInitializer { channel in
                 do {
                     let connectionID = connectionIDAtomic.add(1)
@@ -538,6 +548,10 @@ internal final class HTTPBin<RequestHandler: ChannelInboundHandler> where
 
     func shutdown() throws {
         self.isShutdown.store(true)
+        let promise = self.group.next().makePromise(of: Void.self)
+        self.serverQuiesce.initiateShutdown(promise: promise)
+        
+        try promise.futureResult.wait()
         try self.group.syncShutdownGracefully()
     }
 

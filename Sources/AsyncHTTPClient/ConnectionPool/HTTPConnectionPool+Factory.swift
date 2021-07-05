@@ -20,6 +20,7 @@ import NIOSOCKS
 import NIOSSL
 import NIOTLS
 #if canImport(Network)
+    import Network
     import NIOTransportServices
 #endif
 
@@ -275,7 +276,10 @@ extension HTTPConnectionPool.ConnectionFactory {
     private func makePlainBootstrap(deadline: NIODeadline, eventLoop: EventLoop) -> NIOClientTCPBootstrapProtocol {
         #if canImport(Network)
             if #available(OSX 10.14, iOS 12.0, tvOS 12.0, watchOS 6.0, *), let tsBootstrap = NIOTSConnectionBootstrap(validatingGroup: eventLoop) {
+                let tcpOptions = NWProtocolTCP.Options()
+                tcpOptions.noDelay = true
                 return tsBootstrap
+                    .tcpOptions(tcpOptions)
                     .connectTimeout(deadline - NIODeadline.now())
                     .channelInitializer { channel in
                         do {
@@ -290,6 +294,7 @@ extension HTTPConnectionPool.ConnectionFactory {
 
         if let nioBootstrap = ClientBootstrap(validatingGroup: eventLoop) {
             return nioBootstrap
+                .channelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
                 .connectTimeout(deadline - NIODeadline.now())
         }
 
@@ -344,11 +349,15 @@ extension HTTPConnectionPool.ConnectionFactory {
             if #available(OSX 10.14, iOS 12.0, tvOS 12.0, watchOS 6.0, *), let tsBootstrap = NIOTSConnectionBootstrap(validatingGroup: eventLoop) {
                 // create NIOClientTCPBootstrap with NIOTS TLS provider
                 let bootstrapFuture = tlsConfig.getNWProtocolTLSOptions(on: eventLoop).map {
-                    options -> NIOClientTCPBootstrapProtocol in
+                    tlsOptions -> NIOClientTCPBootstrapProtocol in
 
-                    tsBootstrap
+                    let tcpOptions = NWProtocolTCP.Options()
+                    tcpOptions.noDelay = true
+
+                    return tsBootstrap
                         .connectTimeout(deadline - NIODeadline.now())
-                        .tlsOptions(options)
+                        .tcpOptions(tcpOptions)
+                        .tlsOptions(tlsOptions)
                         .channelInitializer { channel in
                             do {
                                 try channel.pipeline.syncOperations.addHandler(HTTPClient.NWErrorHandler())
@@ -376,6 +385,7 @@ extension HTTPConnectionPool.ConnectionFactory {
         )
 
         let bootstrap = ClientBootstrap(group: eventLoop)
+            .channelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
             .connectTimeout(deadline - NIODeadline.now())
             .channelInitializer { channel in
                 sslContextFuture.flatMap { (sslContext) -> EventLoopFuture<Void> in

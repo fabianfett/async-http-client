@@ -350,7 +350,9 @@ internal final class HTTPBin<RequestHandler: ChannelInboundHandler> where
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .serverChannelInitializer { channel in
                 channel.pipeline.addHandler(self.activeConnCounterHandler)
-            }.childChannelInitializer { channel in
+            }
+            .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
+            .childChannelInitializer { channel in
                 do {
                     let connectionID = connectionIDAtomic.add(1)
 

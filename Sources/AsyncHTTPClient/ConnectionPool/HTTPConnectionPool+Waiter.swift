@@ -30,7 +30,7 @@ extension HTTPConnectionPool {
 
         var request: HTTPSchedulableRequest
 
-        private var eventLoopRequirement: EventLoop? {
+        var eventLoopRequirement: EventLoop? {
             switch self.request.eventLoopPreference.preference {
             case .delegateAndChannel(on: let eventLoop),
                  .testOnly_exact(channelOn: let eventLoop, delegateOn: _):

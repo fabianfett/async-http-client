@@ -46,10 +46,10 @@ extension HTTPConnectionPool {
         }
 
         enum TaskAction {
-            case executeTask(HTTPExecutableRequest, Connection, cancelWaiter: RequestID?)
-            case executeTasks([(HTTPExecutableRequest, cancelWaiter: RequestID?)], Connection)
-            case failTask(HTTPExecutableRequest, Error, cancelWaiter: RequestID?)
-            case failTasks([(HTTPExecutableRequest, cancelWaiter: RequestID?)], Error)
+            case executeTask(HTTPSchedulableRequest, Connection, cancelWaiter: RequestID?)
+            case executeTasks([(HTTPSchedulableRequest, cancelWaiter: RequestID?)], Connection)
+            case failTask(HTTPSchedulableRequest, Error, cancelWaiter: RequestID?)
+            case failTasks([(HTTPSchedulableRequest, cancelWaiter: RequestID?)], Error)
 
             case scheduleWaiterTimeout(RequestID, HTTPSchedulableRequest, on: EventLoop)
             case cancelWaiterTimeout(RequestID)

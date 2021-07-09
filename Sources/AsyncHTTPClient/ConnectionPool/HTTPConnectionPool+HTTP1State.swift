@@ -318,6 +318,8 @@ extension HTTPConnectionPool {
                 if let nextWaiter = self.waiters.popFirst() {
                     // ensure the request can be run on this eventLoop
                     guard nextWaiter.canBeRun(on: connectionState.eventLoop) else {
+                        // Okay to bang: If the request can not be run on the first proposed
+                        // eventLoop (check in guard), the request has an eventLoopRequirement.
                         let eventLoop = nextWaiter.eventLoopRequirement!
                         let newConnection = HTTP1ConnectionState(
                             connectionID: self.idGenerator.next(),

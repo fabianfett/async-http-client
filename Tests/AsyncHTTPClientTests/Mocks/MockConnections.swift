@@ -134,7 +134,7 @@ struct MockConnections {
             self.isParked = false
         }
 
-        mutating func execute(_ request: HTTPRequestTask) throws {
+        mutating func execute(_ request: HTTPSchedulableRequest) throws {
             guard !self.isParked else {
                 throw Errors.connectionIsParked
             }
@@ -234,7 +234,7 @@ struct MockConnections {
             .filter { $0.isParked }
             .sorted(by: { $0.lastReturned! > $1.lastReturned! })
             .first
-            .flatMap { .testing(id: $0.id, eventLoop: $0.eventLoop) }
+            .flatMap { .__testOnly_connection(id: $0.id, eventLoop: $0.eventLoop) }
     }
 
     var oldestParkedConnection: HTTPConnectionPool.Connection? {
@@ -242,7 +242,7 @@ struct MockConnections {
             .filter { $0.isParked }
             .sorted(by: { $0.lastReturned! < $1.lastReturned! })
             .first
-            .flatMap { .testing(id: $0.id, eventLoop: $0.eventLoop) }
+            .flatMap { .__testOnly_connection(id: $0.id, eventLoop: $0.eventLoop) }
     }
 
     func newestParkedConnection(for eventLoop: EventLoop) -> HTTPConnectionPool.Connection? {
@@ -250,7 +250,7 @@ struct MockConnections {
             .filter { $0.eventLoop === eventLoop && $0.isParked }
             .sorted(by: { $0.lastReturned! > $1.lastReturned! })
             .first
-            .flatMap { .testing(id: $0.id, eventLoop: $0.eventLoop) }
+            .flatMap { .__testOnly_connection(id: $0.id, eventLoop: $0.eventLoop) }
     }
 
     func connections(on eventLoop: EventLoop) -> Int {
@@ -288,7 +288,7 @@ struct MockConnections {
 
         try connection.http1Started()
         self.connections[connection.id] = connection
-        return .testing(id: connection.id, eventLoop: connection.eventLoop)
+        return .__testOnly_connection(id: connection.id, eventLoop: connection.eventLoop)
     }
 
     mutating func failConnectionCreation(_ connectionID: Connection.ID) throws {
@@ -321,7 +321,7 @@ struct MockConnections {
         self.connections[connectionID] = connection
     }
 
-    mutating func execute(_ request: HTTPRequestTask, on connection: Connection) throws {
+    mutating func execute(_ request: HTTPSchedulableRequest, on connection: Connection) throws {
         guard var connection = self.connections[connection.id] else {
             throw Errors.connectionNotFound
         }
@@ -350,14 +350,14 @@ struct MockConnections {
         self.connections.values
             .filter { $0.isParked }
             .randomElement()
-            .flatMap { .testing(id: $0.id, eventLoop: $0.eventLoop) }
+            .flatMap { .__testOnly_connection(id: $0.id, eventLoop: $0.eventLoop) }
     }
 
     mutating func randomLeasedConnection() -> HTTPConnectionPool.Connection? {
         self.connections.values
             .filter { $0.isLeased }
             .randomElement()
-            .flatMap { .testing(id: $0.id, eventLoop: $0.eventLoop) }
+            .flatMap { .__testOnly_connection(id: $0.id, eventLoop: $0.eventLoop) }
     }
 
     enum SetupError: Error {
@@ -384,7 +384,7 @@ struct MockConnections {
         var waiters = MockWaiters()
 
         for _ in 0..<numberOfConnections {
-            let mockTask = MockHTTPRequestTask(eventLoop: eventLoop ?? elg.next())
+            let mockTask = MockHTTPRequest(eventLoop: eventLoop ?? elg.next())
             let action = state.executeTask(mockTask, onPreffered: mockTask.eventLoop, required: false)
 
             guard case .scheduleWaiterTimeout(let waiterID, let taskToWait, on: let waitEL) = action.task,
@@ -405,7 +405,7 @@ struct MockConnections {
             let newConnection = try connections.succeedConnectionCreationHTTP1(connectionID)
             let action = state.newHTTP1ConnectionCreated(newConnection)
 
-            guard case .executeTask(let mockTask, newConnection, cancelWaiter: .some(let waiterID)) = action.task else {
+            guard case .executeTask(let mockRequest, newConnection, cancelWaiter: .some(let waiterID)) = action.task else {
                 throw SetupError.expectedPreviouslyWaitedTaskToBeRunNow
             }
 
@@ -413,7 +413,7 @@ struct MockConnections {
                 throw SetupError.expectedNoConnectionAction
             }
 
-            let task = try waiters.get(waiterID, task: mockTask)
+            let task = try waiters.get(waiterID, task: mockRequest)
             try connections.execute(task, on: newConnection)
             try connections.finishExecution(connectionID)
 
@@ -435,18 +435,18 @@ struct MockWaiters {
         case waiterIDDoesNotMatchTask
     }
 
-    struct Waiter {
-        typealias ID = HTTPConnectionPool.Waiter.ID
+    typealias RequestID = HTTPConnectionPool.RequestID
 
-        let id: ID
-        let request: HTTPRequestTask
+    struct Waiter {
+        let id: RequestID
+        let request: HTTPSchedulableRequest
     }
 
     init() {
         self.waiters = [:]
     }
 
-    private(set) var waiters: [Waiter.ID: Waiter]
+    private(set) var waiters: [RequestID: Waiter]
 
     var count: Int {
         self.waiters.count
@@ -456,7 +456,7 @@ struct MockWaiters {
         self.waiters.isEmpty
     }
 
-    mutating func wait(_ request: HTTPRequestTask, id: Waiter.ID) throws {
+    mutating func wait(_ request: HTTPSchedulableRequest, id: RequestID) throws {
         guard self.waiters[id] == nil else {
             throw Errors.waiterIDAlreadyUsed
         }
@@ -464,7 +464,7 @@ struct MockWaiters {
         self.waiters[id] = Waiter(id: id, request: request)
     }
 
-    mutating func fail(_ id: Waiter.ID, task: HTTPRequestTask) throws {
+    mutating func fail(_ id: RequestID, task: HTTPSchedulableRequest) throws {
         guard let waiter = self.waiters.removeValue(forKey: id) else {
             throw Errors.waiterIDNotFound
         }
@@ -473,7 +473,7 @@ struct MockWaiters {
         }
     }
 
-    mutating func get(_ id: Waiter.ID, task: HTTPRequestTask) throws -> HTTPRequestTask {
+    mutating func get(_ id: RequestID, task: HTTPSchedulableRequest) throws -> HTTPSchedulableRequest {
         guard let waiter = self.waiters.removeValue(forKey: id) else {
             throw Errors.waiterIDNotFound
         }
@@ -484,7 +484,7 @@ struct MockWaiters {
     }
 }
 
-class MockHTTPRequestTask: HTTPRequestTask {
+class MockHTTPRequest: HTTPSchedulableRequest {
     let eventLoopPreference: HTTPClient.EventLoopPreference
     let logger: Logger
     let connectionDeadline: NIODeadline
@@ -516,27 +516,31 @@ class MockHTTPRequestTask: HTTPRequestTask {
         }
     }
 
-    func requestWasQueued(_: HTTP1RequestQueuer) {
+    // MARK: HTTPSchedulableRequest
+
+    func requestWasQueued(_: HTTPRequestScheduler) {
         preconditionFailure("Unimplemented")
     }
 
-    func willBeExecutedOnConnection(_: HTTPConnectionPool.Connection) {
+    func fail(_: Error) {
         preconditionFailure("Unimplemented")
     }
 
-    func willExecuteRequest(_: HTTP1RequestExecutor) -> Bool {
+    // MARK: HTTPExecutableRequest
+
+    var requestHead: HTTPRequestHead {
         preconditionFailure("Unimplemented")
     }
 
-    func requestHeadSent(_: HTTPRequestHead) {
+    var requestFramingMetadata: RequestFramingMetadata {
         preconditionFailure("Unimplemented")
     }
 
-    func startRequestBodyStream() {
+    func willExecuteRequest(_: HTTPRequestExecutor) {
         preconditionFailure("Unimplemented")
     }
 
-    func pauseRequestBodyStream() {
+    func requestHeadSent() {
         preconditionFailure("Unimplemented")
     }
 
@@ -544,23 +548,7 @@ class MockHTTPRequestTask: HTTPRequestTask {
         preconditionFailure("Unimplemented")
     }
 
-    var request: HTTPClient.Request {
-        preconditionFailure("Unimplemented")
-    }
-
-    func nextRequestBodyPart(channelEL: EventLoop) -> EventLoopFuture<IOData?> {
-        preconditionFailure("Unimplemented")
-    }
-
-    func didSendRequestHead(_: HTTPRequestHead) {
-        preconditionFailure("Unimplemented")
-    }
-
-    func didSendRequestPart(_: IOData) {
-        preconditionFailure("Unimplemented")
-    }
-
-    func didSendRequest() {
+    func pauseRequestBodyStream() {
         preconditionFailure("Unimplemented")
     }
 
@@ -568,15 +556,11 @@ class MockHTTPRequestTask: HTTPRequestTask {
         preconditionFailure("Unimplemented")
     }
 
-    func receiveResponseBodyPart(_: ByteBuffer) {
+    func receiveResponseBodyParts(_: CircularBuffer<ByteBuffer>) {
         preconditionFailure("Unimplemented")
     }
 
-    func receiveResponseEnd() {
-        preconditionFailure("Unimplemented")
-    }
-
-    func fail(_: Error) {
+    func succeedRequest(_: CircularBuffer<ByteBuffer>?) {
         preconditionFailure("Unimplemented")
     }
 }

@@ -18,18 +18,18 @@ import NIOHTTP1
 
 extension HTTPConnectionPool.StateMachine.Action: Equatable {
     public static func == (lhs: HTTPConnectionPool.StateMachine.Action, rhs: HTTPConnectionPool.StateMachine.Action) -> Bool {
-        lhs.connection == rhs.connection && lhs.task == rhs.task
+        lhs.connection == rhs.connection && lhs.request == rhs.request
     }
 }
 
-extension HTTPConnectionPool.StateMachine.TaskAction: Equatable {
-    public static func == (lhs: HTTPConnectionPool.StateMachine.TaskAction, rhs: HTTPConnectionPool.StateMachine.TaskAction) -> Bool {
+extension HTTPConnectionPool.StateMachine.RequestAction: Equatable {
+    public static func == (lhs: HTTPConnectionPool.StateMachine.RequestAction, rhs: HTTPConnectionPool.StateMachine.RequestAction) -> Bool {
         switch (lhs, rhs) {
-        case (.executeTask(let lhsTask, let lhsConnectionID, cancelWaiter: let lhsWaiterID),
-              .executeTask(let rhsTask, let rhsConnectionID, cancelWaiter: let rhsWaiterID)):
+        case (.executeRequest(let lhsTask, let lhsConnectionID, cancelWaiter: let lhsWaiterID),
+              .executeRequest(let rhsTask, let rhsConnectionID, cancelWaiter: let rhsWaiterID)):
             return lhsTask === rhsTask && lhsConnectionID == rhsConnectionID && lhsWaiterID == rhsWaiterID
 
-        case (.executeTasks(let lhsTasks, let lhsConnection), .executeTasks(let rhsTasks, let rhsConnection)):
+        case (.executeRequests(let lhsTasks, let lhsConnection), .executeRequests(let rhsTasks, let rhsConnection)):
             guard lhsConnection == rhsConnection else {
                 return false
             }
@@ -47,9 +47,9 @@ extension HTTPConnectionPool.StateMachine.TaskAction: Equatable {
             }
             return true
 
-        case (.failTask(let lhsTask, _, let lhsWaiterID), .failTask(let rhsTask, _, let rhsWaiterID)):
+        case (.failRequest(let lhsTask, _, let lhsWaiterID), .failRequest(let rhsTask, _, let rhsWaiterID)):
             return lhsTask === rhsTask && lhsWaiterID == rhsWaiterID
-        case (.failTasks(let lhsTasks, _), .failTasks(let rhsTasks, _)):
+        case (.failRequests(let lhsTasks, _), .failRequests(let rhsTasks, _)):
             guard lhsTasks.count == rhsTasks.count else {
                 return false
             }

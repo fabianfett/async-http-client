@@ -363,8 +363,8 @@ struct MockConnections {
     enum SetupError: Error {
         case totalNumberOfConnectionsMustBeLowerThanIdle
         case expectedConnectionToBeCreated
-        case expectedTaskToBeAddedToWaiters
-        case expectedPreviouslyWaitedTaskToBeRunNow
+        case expectedRequestToBeAddedToWaiters
+        case expectedPreviouslyWaitedRequestToBeRunNow
         case expectedNoConnectionAction
         case expectedConnectionToBeParked
     }
@@ -385,12 +385,12 @@ struct MockConnections {
 
         for _ in 0..<numberOfConnections {
             let mockTask = MockHTTPRequest(eventLoop: eventLoop ?? elg.next())
-            let action = state.executeTask(mockTask, onPreffered: mockTask.eventLoop, required: false)
+            let action = state.executeRequest(mockTask, onPreffered: mockTask.eventLoop, required: false)
 
-            guard case .scheduleWaiterTimeout(let waiterID, let taskToWait, on: let waitEL) = action.task,
+            guard case .scheduleWaiterTimeout(let waiterID, let taskToWait, on: let waitEL) = action.request,
                 taskToWait === mockTask,
                 mockTask.eventLoop === waitEL else {
-                throw SetupError.expectedTaskToBeAddedToWaiters
+                throw SetupError.expectedRequestToBeAddedToWaiters
             }
 
             guard case .createConnection(let connectionID, on: let eventLoop) = action.connection else {
@@ -405,16 +405,16 @@ struct MockConnections {
             let newConnection = try connections.succeedConnectionCreationHTTP1(connectionID)
             let action = state.newHTTP1ConnectionCreated(newConnection)
 
-            guard case .executeTask(let mockRequest, newConnection, cancelWaiter: .some(let waiterID)) = action.task else {
-                throw SetupError.expectedPreviouslyWaitedTaskToBeRunNow
+            guard case .executeRequest(let mockRequest, newConnection, cancelWaiter: .some(let waiterID)) = action.request else {
+                throw SetupError.expectedPreviouslyWaitedRequestToBeRunNow
             }
 
             guard case .none = action.connection else {
                 throw SetupError.expectedNoConnectionAction
             }
 
-            let task = try waiters.get(waiterID, task: mockRequest)
-            try connections.execute(task, on: newConnection)
+            let request = try waiters.get(waiterID, request: mockRequest)
+            try connections.execute(request, on: newConnection)
             try connections.finishExecution(connectionID)
 
             guard state.http1ConnectionReleased(connectionID) == .init(.none, .scheduleTimeoutTimer(connectionID)) else {
@@ -464,20 +464,20 @@ struct MockWaiters {
         self.waiters[id] = Waiter(id: id, request: request)
     }
 
-    mutating func fail(_ id: RequestID, task: HTTPSchedulableRequest) throws {
+    mutating func fail(_ id: RequestID, request: HTTPSchedulableRequest) throws {
         guard let waiter = self.waiters.removeValue(forKey: id) else {
             throw Errors.waiterIDNotFound
         }
-        guard waiter.request === task else {
+        guard waiter.request === request else {
             throw Errors.waiterIDDoesNotMatchTask
         }
     }
 
-    mutating func get(_ id: RequestID, task: HTTPSchedulableRequest) throws -> HTTPSchedulableRequest {
+    mutating func get(_ id: RequestID, request: HTTPSchedulableRequest) throws -> HTTPSchedulableRequest {
         guard let waiter = self.waiters.removeValue(forKey: id) else {
             throw Errors.waiterIDNotFound
         }
-        guard waiter.request === task else {
+        guard waiter.request === request else {
             throw Errors.waiterIDDoesNotMatchTask
         }
         return waiter.request

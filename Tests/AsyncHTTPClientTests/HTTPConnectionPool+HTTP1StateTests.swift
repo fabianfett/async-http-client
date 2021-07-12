@@ -31,32 +31,32 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
         var waiters = MockWaiters()
 
         for _ in 0..<8 {
-            let task = MockHTTPRequest(eventLoop: elg.next())
-            let action = state.executeTask(task, onPreffered: task.eventLoop, required: false)
+            let request = MockHTTPRequest(eventLoop: elg.next())
+            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
             guard case .createConnection(let connectionID, let connectionEL) = action.connection else {
                 return XCTFail("Unexpected connection action")
             }
-            guard case .scheduleWaiterTimeout(let waiterID, _, on: let waiterEL) = action.task else {
-                return XCTFail("Unexpected task action")
+            guard case .scheduleWaiterTimeout(let waiterID, _, on: let waiterEL) = action.request else {
+                return XCTFail("Unexpected request action")
             }
-            XCTAssert(waiterEL === task.eventLoop)
-            XCTAssert(connectionEL === task.eventLoop)
+            XCTAssert(waiterEL === request.eventLoop)
+            XCTAssert(connectionEL === request.eventLoop)
 
             XCTAssertNoThrow(try connections.createConnection(connectionID, on: connectionEL))
-            XCTAssertNoThrow(try waiters.wait(task, id: waiterID))
+            XCTAssertNoThrow(try waiters.wait(request, id: waiterID))
         }
 
         for _ in 0..<8 {
-            let task = MockHTTPRequest(eventLoop: elg.next())
-            let action = state.executeTask(task, onPreffered: task.eventLoop, required: false)
+            let request = MockHTTPRequest(eventLoop: elg.next())
+            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
             guard case .none = action.connection else {
                 return XCTFail("Unexpected connection action")
             }
-            guard case .scheduleWaiterTimeout(let waiterID, _, on: let waiterEL) = action.task else {
-                return XCTFail("Unexpected task action")
+            guard case .scheduleWaiterTimeout(let waiterID, _, on: let waiterEL) = action.request else {
+                return XCTFail("Unexpected request action")
             }
-            XCTAssert(waiterEL === task.eventLoop)
-            XCTAssertNoThrow(try waiters.wait(task, id: waiterID))
+            XCTAssert(waiterEL === request.eventLoop)
+            XCTAssertNoThrow(try waiters.wait(request, id: waiterID))
         }
 
         // fail all connection attempts
@@ -68,11 +68,11 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             XCTAssertNoThrow(try connections.failConnectionCreation(randomConnectionID))
             let action = state.failedToCreateNewConnection(SomeError(), connectionID: randomConnectionID)
 
-            guard case .failTask(let task, let error, .some(let waiterID)) = action.task, error is SomeError else {
-                return XCTFail("Unexpected task action: \(action.task)")
+            guard case .failRequest(let request, let error, .some(let waiterID)) = action.request, error is SomeError else {
+                return XCTFail("Unexpected request action: \(action.request)")
             }
 
-            XCTAssertNoThrow(try waiters.fail(waiterID, task: task))
+            XCTAssertNoThrow(try waiters.fail(waiterID, request: request))
 
             switch action.connection {
             case .createConnection(let newConnectionID, let eventLoop):
@@ -110,10 +110,10 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         for index in 0..<100 {
             let request = MockHTTPRequest(eventLoop: elg.next(), requiresEventLoopForChannel: true)
-            let action = state.executeTask(request, onPreffered: request.eventLoop, required: true)
+            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: true)
 
-            guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.task else {
-                return XCTFail("Unexpected task action")
+            guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.request else {
+                return XCTFail("Unexpected request action")
             }
 
             XCTAssert(request === requestToWait)
@@ -125,7 +125,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
             if index < 7 {
                 // Since we have one existing connection and eight connections are allowed, the
-                // first seven tasks, will create new connections.
+                // first seven requests, will create new connections.
                 guard case .createConnection(let id, on: let el) = action.connection else {
                     return XCTFail("Unexpected connection action \(index): \(action.connection)")
                 }
@@ -133,7 +133,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
                 connectionID = id
                 eventLoop = el
             } else {
-                // After the first seven tasks, we need to replace existing connections. We try to
+                // After the first seven requests, we need to replace existing connections. We try to
                 // replace the connection that hasn't been use the longest.
                 guard case .replaceConnection(let oid, let id, let el) = action.connection else {
                     return XCTFail("Unexpected connection action")
@@ -158,15 +158,15 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             var actionAfterCreation: HTTPConnectionPool.StateMachine.Action?
             XCTAssertNoThrow(actionAfterCreation = try state.newHTTP1ConnectionCreated(XCTUnwrap(newConnection)))
             XCTAssertEqual(actionAfterCreation?.connection, .some(.none))
-            XCTAssertEqual(actionAfterCreation?.task, try .executeTask(request, XCTUnwrap(newConnection), cancelWaiter: waiterID))
+            XCTAssertEqual(actionAfterCreation?.request, try .executeRequest(request, XCTUnwrap(newConnection), cancelWaiter: waiterID))
 
-            XCTAssertNoThrow(try connections.execute(waiters.get(waiterID, task: request), on: XCTUnwrap(newConnection)))
+            XCTAssertNoThrow(try connections.execute(waiters.get(waiterID, request: request), on: XCTUnwrap(newConnection)))
             XCTAssertNoThrow(try connections.finishExecution(connectionID))
 
             let actionAfterRequest = state.http1ConnectionReleased(connectionID)
 
             XCTAssertEqual(actionAfterRequest.connection, .scheduleTimeoutTimer(connectionID))
-            XCTAssertEqual(actionAfterRequest.task, .none)
+            XCTAssertEqual(actionAfterRequest.request, .none)
 
             XCTAssertNoThrow(try connections.parkConnection(connectionID))
         }
@@ -192,11 +192,11 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             }
 
             let request = MockHTTPRequest(eventLoop: eventLoop)
-            let action = state.executeTask(request, onPreffered: request.eventLoop, required: false)
+            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
 
             XCTAssertEqual(action.connection, .cancelTimeoutTimer(expectedConnection.id))
-            guard case .executeTask(let returnedRequest, expectedConnection, cancelWaiter: nil) = action.task else {
-                return XCTFail("Expected to execute a task next, but got: \(action.task)")
+            guard case .executeRequest(let returnedRequest, expectedConnection, cancelWaiter: nil) = action.request else {
+                return XCTFail("Expected to execute a request next, but got: \(action.request)")
             }
 
             XCTAssert(request === returnedRequest)
@@ -214,11 +214,11 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             // in 10% of the cases, we require an explicit EventLoop.
             let elRequired = (0..<10).randomElement().flatMap { $0 == 0 ? true : false }!
             let request = MockHTTPRequest(eventLoop: eventLoop, requiresEventLoopForChannel: elRequired)
-            let action = state.executeTask(request, onPreffered: request.eventLoop, required: elRequired)
+            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: elRequired)
 
             XCTAssertEqual(action.connection, .none)
-            guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.task else {
-                return XCTFail("Unexpected task action: \(action.task)")
+            guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.request else {
+                return XCTFail("Unexpected request action: \(action.request)")
             }
 
             XCTAssert(request === requestToWait)
@@ -236,12 +236,12 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             case .scheduleTimeoutTimer(connection.id):
                 // if all waiters are processed, the connection will be parked
                 XCTAssert(waitersOrder.isEmpty)
-                XCTAssertEqual(action.task, .none)
+                XCTAssertEqual(action.request, .none)
                 XCTAssertNoThrow(try connections.parkConnection(connection.id))
             case .replaceConnection(let oldConnection, with: let newConnectionID, on: let newEventLoop):
                 XCTAssertEqual(connection, oldConnection)
                 XCTAssert(connection.eventLoop !== newEventLoop)
-                XCTAssertEqual(action.task, .none)
+                XCTAssertEqual(action.request, .none)
                 XCTAssertNoThrow(try connections.closeConnection(connection))
                 XCTAssertNoThrow(try connections.createConnection(newConnectionID, on: newEventLoop))
 
@@ -250,17 +250,17 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
                 guard let newConnection = maybeNewConnection else { return XCTFail("Expected to get a new connection") }
                 let actionAfterReplacement = state.newHTTP1ConnectionCreated(newConnection)
                 XCTAssertEqual(actionAfterReplacement.connection, .none)
-                guard case .executeTask(let task, newConnection, cancelWaiter: .some(let waiterID)) = actionAfterReplacement.task else {
-                    return XCTFail("Unexpected task action: \(actionAfterReplacement.task)")
+                guard case .executeRequest(let request, newConnection, cancelWaiter: .some(let waiterID)) = actionAfterReplacement.request else {
+                    return XCTFail("Unexpected request action: \(actionAfterReplacement.request)")
                 }
                 XCTAssertEqual(waiterID, waitersOrder.popFirst())
-                XCTAssertNoThrow(try connections.execute(waiters.get(waiterID, task: task), on: newConnection))
+                XCTAssertNoThrow(try connections.execute(waiters.get(waiterID, request: request), on: newConnection))
             case .none:
-                guard case .executeTask(let task, connection, cancelWaiter: .some(let waiterID)) = action.task else {
-                    return XCTFail("Unexpected task action: \(action.task)")
+                guard case .executeRequest(let request, connection, cancelWaiter: .some(let waiterID)) = action.request else {
+                    return XCTFail("Unexpected request action: \(action.request)")
                 }
                 XCTAssertEqual(waiterID, waitersOrder.popFirst())
-                XCTAssertNoThrow(try connections.execute(waiters.get(waiterID, task: task), on: connection))
+                XCTAssertNoThrow(try connections.execute(waiters.get(waiterID, request: request), on: connection))
 
             default:
                 XCTFail("Unexpected connection action: \(action)")
@@ -293,7 +293,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             let elRequired = (0..<10).randomElement().flatMap { $0 == 0 ? true : false }!
             let request = MockHTTPRequest(eventLoop: eventLoop, requiresEventLoopForChannel: elRequired)
 
-            let action = state.executeTask(request, onPreffered: request.eventLoop, required: elRequired)
+            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: elRequired)
 
             guard let expectedConnection = connections.newestParkedConnection(for: eventLoop) ?? connections.newestParkedConnection else {
                 return XCTFail("Expected to have connections available")
@@ -301,11 +301,11 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
             switch action.connection {
             case .cancelTimeoutTimer(let connectionID):
-                XCTAssertEqual(connectionID, expectedConnection.id, "Task is scheduled on the connection we expected")
+                XCTAssertEqual(connectionID, expectedConnection.id, "Request is scheduled on the connection we expected")
                 XCTAssertNoThrow(try connections.activateConnection(connectionID))
 
-                guard case .executeTask(let request, let connection, cancelWaiter: nil) = action.task else {
-                    return XCTFail("Expected to execute a task, but got: \(action.task)")
+                guard case .executeRequest(let request, let connection, cancelWaiter: nil) = action.request else {
+                    return XCTFail("Expected to execute a request, but got: \(action.request)")
                 }
                 XCTAssertEqual(connection, expectedConnection)
                 XCTAssertNoThrow(try connections.execute(request, on: connection))
@@ -315,8 +315,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
                 XCTAssertNoThrow(try connections.parkConnection(connectionID))
 
             case .replaceConnection(let oldConnection, with: let newConnectionID, on: let newConnectionEL):
-                guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.task else {
-                    return XCTFail("Unexpected task action: \(action.task)")
+                guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.request else {
+                    return XCTFail("Unexpected request action: \(action.request)")
                 }
                 XCTAssert(request === requestToWait)
                 XCTAssert(request.eventLoop === newConnectionEL)
@@ -332,7 +332,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
                 let actionAfterReplacement = state.newHTTP1ConnectionCreated(newConnection)
                 XCTAssertEqual(actionAfterReplacement.connection, .none)
-                XCTAssertEqual(actionAfterReplacement.task, .executeTask(request, newConnection, cancelWaiter: waiterID))
+                XCTAssertEqual(actionAfterReplacement.request, .executeRequest(request, newConnection, cancelWaiter: waiterID))
                 XCTAssertNoThrow(try connections.execute(request, on: newConnection))
                 XCTAssertNoThrow(try connections.finishExecution(newConnectionID))
 
@@ -361,10 +361,10 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
         guard let connectionToAbort = connections.newestParkedConnection else {
             return XCTFail("Expected to have a parked connection")
         }
-        let action = state.executeTask(request, onPreffered: request.eventLoop, required: false)
+        let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
         XCTAssertEqual(action.connection, .cancelTimeoutTimer(connectionToAbort.id))
         XCTAssertNoThrow(try connections.activateConnection(connectionToAbort.id))
-        XCTAssertEqual(action.task, .executeTask(request, connectionToAbort, cancelWaiter: nil))
+        XCTAssertEqual(action.request, .executeRequest(request, connectionToAbort, cancelWaiter: nil))
         XCTAssertNoThrow(try connections.execute(request, on: connectionToAbort))
         XCTAssertEqual(connections.parked, 7)
         XCTAssertEqual(connections.leased, 1)
@@ -411,10 +411,10 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             }
 
             let request = MockHTTPRequest(eventLoop: eventLoop)
-            let action = state.executeTask(request, onPreffered: request.eventLoop, required: false)
+            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
 
             XCTAssertEqual(action.connection, .cancelTimeoutTimer(expectedConnection.id))
-            XCTAssertEqual(action.task, .executeTask(request, expectedConnection, cancelWaiter: nil))
+            XCTAssertEqual(action.request, .executeRequest(request, expectedConnection, cancelWaiter: nil))
 
             XCTAssertNoThrow(try connections.activateConnection(expectedConnection.id))
             XCTAssertNoThrow(try connections.execute(request, on: expectedConnection))
@@ -429,11 +429,11 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             // in 10% of the cases, we require an explicit EventLoop.
             let elRequired = (0..<10).randomElement().flatMap { $0 == 0 ? true : false }!
             let request = MockHTTPRequest(eventLoop: eventLoop, requiresEventLoopForChannel: elRequired)
-            let action = state.executeTask(request, onPreffered: request.eventLoop, required: elRequired)
+            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: elRequired)
 
             XCTAssertEqual(action.connection, .none)
-            guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.task else {
-                return XCTFail("Unexpected task action: \(action.task)")
+            guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.request else {
+                return XCTFail("Unexpected request action: \(action.request)")
             }
 
             XCTAssert(request === requestToWait)
@@ -449,7 +449,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
             switch action.connection {
             case .createConnection(let newConnectionID, on: let eventLoop):
-                XCTAssertEqual(action.task, .none)
+                XCTAssertEqual(action.request, .none)
                 XCTAssertNoThrow(try connections.createConnection(newConnectionID, on: eventLoop))
                 XCTAssertEqual(connections.starting, 1)
 
@@ -458,12 +458,12 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
                 guard let newConnection = maybeNewConnection else { return XCTFail("Expected to get a new connection") }
                 let afterRecreationAction = state.newHTTP1ConnectionCreated(newConnection)
                 XCTAssertEqual(afterRecreationAction.connection, .none)
-                guard case .executeTask(let task, newConnection, cancelWaiter: .some(let waiterID)) = afterRecreationAction.task else {
-                    return XCTFail("Unexpected task action: \(action.task)")
+                guard case .executeRequest(let request, newConnection, cancelWaiter: .some(let waiterID)) = afterRecreationAction.request else {
+                    return XCTFail("Unexpected request action: \(action.request)")
                 }
 
                 XCTAssertEqual(waiterID, waitersOrder.popFirst())
-                XCTAssertNoThrow(try connections.execute(waiters.get(waiterID, task: task), on: newConnection))
+                XCTAssertNoThrow(try connections.execute(waiters.get(waiterID, request: request), on: newConnection))
 
             case .none:
                 XCTAssert(waiters.isEmpty)
@@ -487,7 +487,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         let action = state.connectionTimeout(connection.id)
         XCTAssertEqual(action.connection, .closeConnection(connection, isShutdown: .no))
-        XCTAssertEqual(action.task, .none)
+        XCTAssertEqual(action.request, .none)
         XCTAssertNoThrow(try connections.closeConnection(connection))
     }
 
@@ -501,7 +501,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         XCTAssertEqual(connections.parked, 8)
         let action = state.shutdown()
-        XCTAssertEqual(.none, action.task)
+        XCTAssertEqual(.none, action.request)
 
         guard case .cleanupConnection(close: let close, cancel: [], isShutdown: .yes(unclean: false)) = action.connection else {
             return XCTFail("Unexpected connection event: \(action.connection)")

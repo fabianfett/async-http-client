@@ -18,11 +18,11 @@ import NIOHTTP1
 extension HTTPConnectionPool {
     struct StateMachine {
         struct Action {
-            let task: TaskAction
+            let request: RequestAction
             let connection: ConnectionAction
 
-            init(_ task: TaskAction, _ connection: ConnectionAction) {
-                self.task = task
+            init(_ request: RequestAction, _ connection: ConnectionAction) {
+                self.request = request
                 self.connection = connection
             }
         }
@@ -45,11 +45,11 @@ extension HTTPConnectionPool {
             case none
         }
 
-        enum TaskAction {
-            case executeTask(HTTPSchedulableRequest, Connection, cancelWaiter: RequestID?)
-            case executeTasks([(HTTPSchedulableRequest, cancelWaiter: RequestID?)], Connection)
-            case failTask(HTTPSchedulableRequest, Error, cancelWaiter: RequestID?)
-            case failTasks([(HTTPSchedulableRequest, cancelWaiter: RequestID?)], Error)
+        enum RequestAction {
+            case executeRequest(HTTPSchedulableRequest, Connection, cancelWaiter: RequestID?)
+            case executeRequests([(HTTPSchedulableRequest, cancelWaiter: RequestID?)], Connection)
+            case failRequest(HTTPSchedulableRequest, Error, cancelWaiter: RequestID?)
+            case failRequests([(HTTPSchedulableRequest, cancelWaiter: RequestID?)], Error)
 
             case scheduleWaiterTimeout(RequestID, HTTPSchedulableRequest, on: EventLoop)
             case cancelWaiterTimeout(RequestID)
@@ -79,11 +79,11 @@ extension HTTPConnectionPool {
             self.eventLoopGroup = eventLoopGroup
         }
 
-        mutating func executeTask(_ task: HTTPSchedulableRequest, onPreffered prefferedEL: EventLoop, required: Bool) -> Action {
+        mutating func executeRequest(_ request: HTTPSchedulableRequest, onPreffered prefferedEL: EventLoop, required: Bool) -> Action {
             switch self.state {
             case .http1(var http1StateMachine):
                 return self.state.modify { state -> Action in
-                    let action = http1StateMachine.executeTask(task, onPreffered: prefferedEL, required: required)
+                    let action = http1StateMachine.executeRequest(request, onPreffered: prefferedEL, required: required)
                     state = .http1(http1StateMachine)
                     return state.modify(with: action)
                 }

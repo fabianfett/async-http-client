@@ -32,7 +32,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         for _ in 0..<8 {
             let request = MockHTTPRequest(eventLoop: elg.next())
-            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
+            let action = state.executeRequest(request, onPreferred: request.eventLoop, required: false)
             guard case .createConnection(let connectionID, let connectionEL) = action.connection else {
                 return XCTFail("Unexpected connection action")
             }
@@ -48,7 +48,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         for _ in 0..<8 {
             let request = MockHTTPRequest(eventLoop: elg.next())
-            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
+            let action = state.executeRequest(request, onPreferred: request.eventLoop, required: false)
             guard case .none = action.connection else {
                 return XCTFail("Unexpected connection action")
             }
@@ -110,7 +110,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         for index in 0..<100 {
             let request = MockHTTPRequest(eventLoop: elg.next(), requiresEventLoopForChannel: true)
-            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: true)
+            let action = state.executeRequest(request, onPreferred: request.eventLoop, required: true)
 
             guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.request else {
                 return XCTFail("Unexpected request action")
@@ -192,7 +192,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             }
 
             let request = MockHTTPRequest(eventLoop: eventLoop)
-            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
+            let action = state.executeRequest(request, onPreferred: request.eventLoop, required: false)
 
             XCTAssertEqual(action.connection, .cancelTimeoutTimer(expectedConnection.id))
             guard case .executeRequest(let returnedRequest, expectedConnection, cancelWaiter: nil) = action.request else {
@@ -214,7 +214,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             // in 10% of the cases, we require an explicit EventLoop.
             let elRequired = (0..<10).randomElement().flatMap { $0 == 0 ? true : false }!
             let request = MockHTTPRequest(eventLoop: eventLoop, requiresEventLoopForChannel: elRequired)
-            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: elRequired)
+            let action = state.executeRequest(request, onPreferred: request.eventLoop, required: elRequired)
 
             XCTAssertEqual(action.connection, .none)
             guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.request else {
@@ -293,7 +293,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             let elRequired = (0..<10).randomElement().flatMap { $0 == 0 ? true : false }!
             let request = MockHTTPRequest(eventLoop: eventLoop, requiresEventLoopForChannel: elRequired)
 
-            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: elRequired)
+            let action = state.executeRequest(request, onPreferred: request.eventLoop, required: elRequired)
 
             guard let expectedConnection = connections.newestParkedConnection(for: eventLoop) ?? connections.newestParkedConnection else {
                 return XCTFail("Expected to have connections available")
@@ -361,7 +361,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
         guard let connectionToAbort = connections.newestParkedConnection else {
             return XCTFail("Expected to have a parked connection")
         }
-        let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
+        let action = state.executeRequest(request, onPreferred: request.eventLoop, required: false)
         XCTAssertEqual(action.connection, .cancelTimeoutTimer(connectionToAbort.id))
         XCTAssertNoThrow(try connections.activateConnection(connectionToAbort.id))
         XCTAssertEqual(action.request, .executeRequest(request, connectionToAbort, cancelWaiter: nil))
@@ -411,7 +411,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             }
 
             let request = MockHTTPRequest(eventLoop: eventLoop)
-            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: false)
+            let action = state.executeRequest(request, onPreferred: request.eventLoop, required: false)
 
             XCTAssertEqual(action.connection, .cancelTimeoutTimer(expectedConnection.id))
             XCTAssertEqual(action.request, .executeRequest(request, expectedConnection, cancelWaiter: nil))
@@ -429,7 +429,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
             // in 10% of the cases, we require an explicit EventLoop.
             let elRequired = (0..<10).randomElement().flatMap { $0 == 0 ? true : false }!
             let request = MockHTTPRequest(eventLoop: eventLoop, requiresEventLoopForChannel: elRequired)
-            let action = state.executeRequest(request, onPreffered: request.eventLoop, required: elRequired)
+            let action = state.executeRequest(request, onPreferred: request.eventLoop, required: elRequired)
 
             XCTAssertEqual(action.connection, .none)
             guard case .scheduleWaiterTimeout(let waiterID, let requestToWait, on: let waiterEL) = action.request else {

@@ -80,57 +80,71 @@ extension HTTPConnectionPool {
         }
 
         mutating func started(_ connection: Connection) -> Waiter? {
-            guard case .starting(let waiter) = self.state else {
+            switch self.state {
+            case .starting(let waiter):
+                self.state = .available(connection, since: .now())
+                return waiter
+            case .available, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
-            self.state = .available(connection, since: .now())
-            return waiter
         }
 
         mutating func failedToStart() -> Waiter? {
-            guard case .starting(let waiter) = self.state else {
+            switch self.state {
+            case .starting(let waiter):
+                self.state = .failed
+                return waiter
+            case .available, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
-            self.state = .failed
-            return waiter
         }
 
         mutating func lease() -> Connection {
-            guard case .available(let connection, since: _) = self.state else {
+            switch self.state {
+            case .available(let connection, since: _):
+                self.state = .leased(connection)
+                return connection
+            case .starting, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
-            self.state = .leased(connection)
-            return connection
         }
 
         mutating func release() {
-            guard case .leased(let connection) = self.state else {
+            switch self.state {
+            case .leased(let connection):
+                self.state = .available(connection, since: .now())
+            case .starting, .available, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
-            self.state = .available(connection, since: .now())
         }
 
         mutating func close() -> Connection {
-            guard case .available(let connection, since: _) = self.state else {
+            switch self.state {
+            case .available(let connection, since: _):
+                self.state = .closed
+                return connection
+            case .starting, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
-            self.state = .closed
-            return connection
         }
 
         mutating func cancel() -> Connection {
-            guard case .leased(let connection) = self.state else {
+            switch self.state {
+            case .leased(let connection):
+                return connection
+            case .starting, .available, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
-            return connection
         }
 
         mutating func removeStartWaiter() -> Waiter? {
-            guard case .starting(let waiter) = self.state else {
+            switch self.state {
+            case .starting(let waiter):
+                self.state = .starting(nil)
+                return waiter
+            case .available, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
-            self.state = .starting(nil)
-            return waiter
         }
     }
 

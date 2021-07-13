@@ -85,7 +85,7 @@ extension HTTPConnectionPool {
                 return self.state.modify { state -> Action in
                     let action = http1StateMachine.executeRequest(request, onPreferred: preferredEL, required: required)
                     state = .http1(http1StateMachine)
-                    return state.modify(with: action)
+                    return action
                 }
 
             case .modify:
@@ -99,7 +99,7 @@ extension HTTPConnectionPool {
                 return self.state.modify { state -> Action in
                     let action = httpStateMachine.newHTTP1ConnectionCreated(connection)
                     state = .http1(httpStateMachine)
-                    return state.modify(with: action)
+                    return action
                 }
 
             case .modify:
@@ -113,7 +113,7 @@ extension HTTPConnectionPool {
                 return self.state.modify { state -> Action in
                     let action = http1StateMachine.failedToCreateNewConnection(error, connectionID: connectionID)
                     state = .http1(http1StateMachine)
-                    return state.modify(with: action)
+                    return action
                 }
 
             case .modify:
@@ -127,7 +127,7 @@ extension HTTPConnectionPool {
                 return self.state.modify { state -> Action in
                     let action = http1StateMachine.timeoutWaiter(requestID)
                     state = .http1(http1StateMachine)
-                    return state.modify(with: action)
+                    return action
                 }
 
             case .modify:
@@ -141,7 +141,7 @@ extension HTTPConnectionPool {
                 return self.state.modify { state -> Action in
                     let action = http1StateMachine.cancelWaiter(requestID)
                     state = .http1(http1StateMachine)
-                    return state.modify(with: action)
+                    return action
                 }
 
             case .modify:
@@ -155,7 +155,7 @@ extension HTTPConnectionPool {
                 return self.state.modify { state -> Action in
                     let action = http1StateMachine.connectionTimeout(connectionID)
                     state = .http1(http1StateMachine)
-                    return state.modify(with: action)
+                    return action
                 }
 
             case .modify:
@@ -170,7 +170,7 @@ extension HTTPConnectionPool {
                 return self.state.modify { state -> Action in
                     let action = http1StateMachine.connectionClosed(connectionID)
                     state = .http1(http1StateMachine)
-                    return state.modify(with: action)
+                    return action
                 }
 
             case .modify:
@@ -186,7 +186,7 @@ extension HTTPConnectionPool {
             return self.state.modify { state -> Action in
                 let action = http1StateMachine.http1ConnectionReleased(connectionID)
                 state = .http1(http1StateMachine)
-                return state.modify(with: action)
+                return action
             }
         }
 
@@ -202,7 +202,7 @@ extension HTTPConnectionPool {
                 return self.state.modify { state -> Action in
                     let action = http1StateMachine.shutdown()
                     state = .http1(http1StateMachine)
-                    return state.modify(with: action)
+                    return action
                 }
 
             case .modify:
@@ -221,11 +221,6 @@ extension HTTPConnectionPool.StateMachine.HTTPTypeStateMachine {
             }
         }
         return try closure(&self)
-    }
-
-    mutating func modify(with action: HTTPConnectionPool.StateMachine.Action)
-        -> HTTPConnectionPool.StateMachine.Action {
-        return action
     }
 }
 

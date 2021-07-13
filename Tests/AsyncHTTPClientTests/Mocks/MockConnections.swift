@@ -385,7 +385,7 @@ struct MockConnections {
 
         for _ in 0..<numberOfConnections {
             let mockTask = MockHTTPRequest(eventLoop: eventLoop ?? elg.next())
-            let action = state.executeRequest(mockTask, onPreffered: mockTask.eventLoop, required: false)
+            let action = state.executeRequest(mockTask, onPreferred: mockTask.eventLoop, required: false)
 
             guard case .scheduleWaiterTimeout(let waiterID, let taskToWait, on: let waitEL) = action.request,
                 taskToWait === mockTask,

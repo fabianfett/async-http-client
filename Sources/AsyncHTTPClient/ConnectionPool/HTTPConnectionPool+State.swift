@@ -79,11 +79,11 @@ extension HTTPConnectionPool {
             self.eventLoopGroup = eventLoopGroup
         }
 
-        mutating func executeRequest(_ request: HTTPSchedulableRequest, onPreffered prefferedEL: EventLoop, required: Bool) -> Action {
+        mutating func executeRequest(_ request: HTTPSchedulableRequest, onPreferred preferredEL: EventLoop, required: Bool) -> Action {
             switch self.state {
             case .http1(var http1StateMachine):
                 return self.state.modify { state -> Action in
-                    let action = http1StateMachine.executeRequest(request, onPreffered: prefferedEL, required: required)
+                    let action = http1StateMachine.executeRequest(request, onPreferred: preferredEL, required: required)
                     state = .http1(http1StateMachine)
                     return state.modify(with: action)
                 }

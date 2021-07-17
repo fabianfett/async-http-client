@@ -17,7 +17,8 @@ import NIO
 extension HTTPConnectionPool {
     struct HTTP1ConnectionState {
         enum State {
-            case starting(Waiter?)
+            case waitingToStart(retries: Int)
+            case starting(retries: Int)
             case available(Connection, since: NIODeadline)
             case leased(Connection)
             case failed
@@ -28,15 +29,15 @@ extension HTTPConnectionPool {
         let eventLoop: EventLoop
         let connectionID: Connection.ID
 
-        init(connectionID: Connection.ID, eventLoop: EventLoop, waiter: Waiter) {
+        init(connectionID: Connection.ID, eventLoop: EventLoop) {
             self.connectionID = connectionID
             self.eventLoop = eventLoop
-            self.state = .starting(waiter)
+            self.state = .starting
         }
 
         var isStarting: Bool {
             switch self.state {
-            case .starting:
+            case .starting, .waitingToStart:
                 return true
             case .failed, .closed, .available, .leased:
                 return false
@@ -70,30 +71,19 @@ extension HTTPConnectionPool {
             }
         }
 
-        func isStarting(for requestID: RequestID) -> Bool {
+        mutating func started(_ connection: Connection) {
             switch self.state {
-            case .starting(let waiter):
-                return requestID == waiter?.requestID
-            case .available, .leased, .closed, .failed:
-                return false
-            }
-        }
-
-        mutating func started(_ connection: Connection) -> Waiter? {
-            switch self.state {
-            case .starting(let waiter):
+            case .starting:
                 self.state = .available(connection, since: .now())
-                return waiter
             case .available, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
-        mutating func failedToStart() -> Waiter? {
+        mutating func failedToStart() {
             switch self.state {
-            case .starting(let waiter):
+            case .starting:
                 self.state = .failed
-                return waiter
             case .available, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
@@ -136,16 +126,6 @@ extension HTTPConnectionPool {
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
-
-        mutating func removeStartWaiter() -> Waiter? {
-            switch self.state {
-            case .starting(let waiter):
-                self.state = .starting(nil)
-                return waiter
-            case .available, .leased, .failed, .closed:
-                preconditionFailure("Invalid state: \(self.state)")
-            }
-        }
     }
 
     struct HTTP1StateMachine {
@@ -176,10 +156,11 @@ extension HTTPConnectionPool {
             self.waiters = CircularBuffer(initialCapacity: 32)
         }
 
-        mutating func executeRequest(_ request: HTTPSchedulableRequest, onPreferred preferredEL: EventLoop, required: Bool) -> Action {
-            var eventLoopMatch: (Int, NIODeadline)?
-            var goodMatch: (Int, NIODeadline)?
-
+        mutating func executeRequest(
+            _ request: HTTPSchedulableRequest, 
+            onPreferred preferredEL: EventLoop, 
+            required: Bool
+        ) -> Action {
             switch self.state {
             case .running:
                 break
@@ -193,15 +174,102 @@ extension HTTPConnectionPool {
                 return .init(.failRequest(request, HTTPClientError.alreadyShutdown, cancelWaiter: nil), .none)
             }
 
-            // queuing fast path...
-            // If something is already queued, we can just directly add it to the queue. This saves
-            // a number of comparisons.
-            if !self.waiters.isEmpty {
-                let waiter = Waiter(request: request)
-                self.waiters.append(waiter)
-                return .init(.scheduleWaiterTimeout(waiter.requestID, request, on: preferredEL), .none)
-            }
+            switch self.findAvailableConnection(onPreferred: preferredEL, required: `required`) {
+            case .elMatch(connectionIndex: let index):
+                // if we have an available perfect match connection, we can use it right away
+                let connection = self.connections[index].lease()
+                return .init(
+                    .executeRequest(request, connection, cancelWaiter: nil),
+                    .cancelTimeoutTimer(connection.id)
+                )
+            
+            case .offElMatch(connectionIndex: let index) where `required` == true:
+                // There is a connection, but it doesn't match or required EL
+                assert(self.connections[index].eventLoop !== preferredEL)
+                
+                // No matter what we do, the request will need to wait!
+                let newWaiter = Waiter(request: request)
+                self.waiters.append(newWaiter)
+                
+                if self.maximumConcurrentConnections > self.connections.count {
+                    // if we are not at max connections, we should create a new connection
+                    let newConnection = HTTP1ConnectionState(connectionID: self.idGenerator.next(), eventLoop: preferredEL)
+                    self.connections.append(newConnection)
+                    
+                    return .init(
+                        .scheduleWaiterTimeout(newWaiter.requestID, request, on: preferredEL),
+                        .createConnection(newConnection.connectionID, on: preferredEL)
+                    )
+                }
+                
+                // we are at maximum connections.
+                if self.doesAnActiveConnectionExist(for: preferredEL) {
+                    // another connection exists that serves on this el. For this reason we should
+                    // just wait for this el to become available
+                    return .init(
+                        .scheduleWaiterTimeout(newWaiter.requestID, request, on: preferredEL),
+                        .none
+                    )
+                }
+                
+                // another connection does not exist, that could eventually serve our request.
+                // replace the current connection with a new one on the correct el
 
+                let newConnectionID = self.idGenerator.next()
+                var replacement = HTTP1ConnectionState(connectionID: newConnectionID, eventLoop: preferredEL)
+                swap(&replacement, &self.connections[index])
+
+                return .init(
+                    .scheduleWaiterTimeout(newWaiter.requestID, request, on: preferredEL),
+                    .replaceConnection(replacement.close(), with: newConnectionID, on: preferredEL)
+                )
+                
+            case .offElMatch(connectionIndex: let index):
+                assert(`required` == false)
+                let connection = self.connections[index].lease()
+                return .init(
+                    .executeRequest(request, connection, cancelWaiter: nil),
+                    .cancelTimeoutTimer(connection.id)
+                )
+                
+            case .none:
+                // there isn't any idle connection.
+                
+                // No matter what we do, the request will need to wait!
+                let newWaiter = Waiter(request: request)
+                self.waiters.append(newWaiter)
+                
+                if self.maximumConcurrentConnections > self.connections.count {
+                    // if we are not at max connections, we should create a new connection
+                    let newConnection = HTTP1ConnectionState(connectionID: self.idGenerator.next(), eventLoop: preferredEL)
+                    self.connections.append(newConnection)
+                    
+                    return .init(
+                        .scheduleWaiterTimeout(newWaiter.requestID, request, on: preferredEL),
+                        .createConnection(newConnection.connectionID, on: preferredEL)
+                    )
+                }
+
+                // all connections are busy and there is no room for more connections, we need to wait!
+                return .init(
+                    .scheduleWaiterTimeout(newWaiter.requestID, request, on: preferredEL),
+                    .none
+                )
+            }
+        }
+        
+        enum AvailableConnectionMatch {
+            case elMatch(connectionIndex: Int)
+            case offElMatch(connectionIndex: Int)
+            case none
+        }
+        
+        private func findAvailableConnection(onPreferred preferredEL: EventLoop, required: Bool)
+            -> AvailableConnectionMatch
+        {
+            var eventLoopMatch: (Int, NIODeadline)?
+            var goodMatch: (Int, NIODeadline)?
+            
             // To find an appropriate connection we iterate all existing connections.
             // While we do this we try to find the best fitting connection for our request.
             //
@@ -253,125 +321,39 @@ extension HTTPConnectionPool {
                     }
                 }
             }
-
+            
             // if we found an eventLoopMatch, we can execute the request right away
             if let (index, _) = eventLoopMatch {
-                assert(self.waiters.isEmpty, "If a connection is available, why are there any waiters")
-                let connection = self.connections[index].lease()
-                return .init(
-                    .executeRequest(request, connection, cancelWaiter: nil),
-                    .cancelTimeoutTimer(connection.id)
-                )
+                return .elMatch(connectionIndex: index)
             }
-
+            
             // if we found a good match, let's use this
             if let (index, _) = goodMatch {
-                assert(self.waiters.isEmpty, "If a connection is available, why are there any waiters")
-                if !required {
-                    let connection = self.connections[index].lease()
-                    return .init(
-                        .executeRequest(request, connection, cancelWaiter: nil),
-                        .cancelTimeoutTimer(connection.id)
-                    )
-                } else {
-                    assert(self.connections.count - self.maximumConcurrentConnections == 0)
-                    let newConnectionID = self.idGenerator.next()
-                    let newWaiter = Waiter(request: request)
-
-                    var replacement = HTTP1ConnectionState(
-                        connectionID: newConnectionID,
-                        eventLoop: preferredEL,
-                        waiter: newWaiter
-                    )
-                    swap(&replacement, &self.connections[index])
-
-                    return .init(
-                        .scheduleWaiterTimeout(newWaiter.requestID, request, on: preferredEL),
-                        .replaceConnection(replacement.close(), with: newConnectionID, on: preferredEL)
-                    )
-                }
+                return .offElMatch(connectionIndex: index)
             }
 
-            // we didn't find any match at all... Let's create a new connection, if there is room
-            // left
-            if self.connections.count < self.maximumConcurrentConnections {
-                let newConnectionID = self.idGenerator.next()
-                let newWaiter = Waiter(request: request)
-                self.connections.append(.init(connectionID: newConnectionID, eventLoop: preferredEL, waiter: newWaiter))
-                return .init(
-                    .scheduleWaiterTimeout(newWaiter.requestID, request, on: preferredEL),
-                    .createConnection(newConnectionID, on: preferredEL)
-                )
+            return .none
+        }
+        
+        private func doesAnActiveConnectionExist(for eventLoop: EventLoop) -> Bool {
+            self.connections.contains {
+                $0.eventLoop === eventLoop
             }
-
-            // all connections are busy, and there is no more room to create further connections
-            let waiter = Waiter(request: request)
-            self.waiters.append(waiter)
-            return .init(
-                .scheduleWaiterTimeout(waiter.requestID, request, on: preferredEL),
-                .none
-            )
         }
 
         mutating func newHTTP1ConnectionCreated(_ connection: Connection) -> Action {
             guard let index = self.connections.firstIndex(where: { $0.connectionID == connection.id }) else {
                 preconditionFailure("There is a new connection, that we didn't request!")
             }
-
-            var connectionState = self.connections[index]
-
+            
+            self.connections[index].started(connection)
+            
             switch self.state {
             case .running:
-                let maybeWaiter = connectionState.started(connection)
-
-                // 1. check if we have an associated waiter with this connection
-                if let waiter = maybeWaiter {
-                    _ = connectionState.lease() // We already have a pointer to the connection. This is why we can ignore the return value.
-                    self.connections[index] = connectionState
-                    return .init(
-                        .executeRequest(waiter.request, connection, cancelWaiter: waiter.requestID),
-                        .none
-                    )
-                }
-
-                // 2. if we don't have an associated waiter for this connection, pick the first one
-                //    from the queue
-                if let nextWaiter = self.waiters.popFirst() {
-                    // ensure the request can be run on this eventLoop
-                    guard nextWaiter.canBeRun(on: connectionState.eventLoop) else {
-                        // Okay to bang: If the request can not be run on the first proposed
-                        // eventLoop (check in guard), the request has an eventLoopRequirement.
-                        let eventLoop = nextWaiter.eventLoopRequirement!
-                        let newConnection = HTTP1ConnectionState(
-                            connectionID: self.idGenerator.next(),
-                            eventLoop: eventLoop,
-                            waiter: nextWaiter
-                        )
-                        self.connections[index] = newConnection
-                        return .init(
-                            .none,
-                            .replaceConnection(connectionState.close(), with: newConnection.connectionID, on: eventLoop)
-                        )
-                    }
-
-                    let connection = connectionState.lease()
-                    self.connections[index] = connectionState
-                    return .init(
-                        .executeRequest(nextWaiter.request, connection, cancelWaiter: nextWaiter.requestID),
-                        .none
-                    )
-                }
-
-                self.connections[index] = connectionState
-                return .init(.none, .scheduleTimeoutTimer(connectionState.connectionID))
-
+                return self.idleConnectionHasBecomeAvailable(&self.connections[index])
             case .shuttingDown(unclean: let unclean):
                 // if we are in shutdown, we want to get rid off this connection asap.
-                guard connectionState.started(connection) == nil else {
-                    preconditionFailure("Expected to remove the waiter when shutdown is issued")
-                }
-
-                self.connections.remove(at: index)
+                var connection = self.connections.remove(at: index)
                 let isShutdown: StateMachine.ConnectionAction.IsShutdown
                 if self.connections.isEmpty {
                     self.state = .shutDown
@@ -380,11 +362,76 @@ extension HTTPConnectionPool {
                     isShutdown = .no
                 }
 
-                return .init(.none, .closeConnection(connectionState.close(), isShutdown: isShutdown))
+                return .init(.none, .closeConnection(connection.close(), isShutdown: isShutdown))
 
             case .shutDown:
                 preconditionFailure("The pool is already shutdown all connections must already been torn down")
             }
+        }
+        
+        private mutating func idleConnectionHasBecomeAvailable(_ connection: inout HTTP1ConnectionState) -> Action {
+            guard !self.waiters.isEmpty else {
+                // if we don't have any waiters, we can put this connection to idle right away
+                return .init(
+                    .none,
+                    .scheduleTimeoutTimer(connection.connectionID)
+                )
+            }
+            
+            // if we have waiters, we probably want to execute them.
+            var waiterIndex = self.waiters.startIndex
+            var connectionAction: StateMachine.ConnectionAction = .none
+            while waiterIndex < self.waiters.endIndex {
+                // use defer increase waiter index here, to allow for early exits
+                defer { waiterIndex = self.waiters.index(after: waiterIndex) }
+
+                // check the waiters, if they are executable on this connection
+                if self.waiters[waiterIndex].canBeRun(on: connection.eventLoop) {
+                    let waiter = self.waiters.remove(at: waiterIndex)
+                    return .init(
+                        .executeRequest(waiter.request, connection.lease(), cancelWaiter: waiter.requestID),
+                        connectionAction
+                    )
+                } else {
+                    // if they are not executable on this connection, we must ensure there is 
+                    // another connection that they will be run on eventually.
+                    let waiterEL = self.waiters[waiterIndex].eventLoopRequirement!
+                    if self.doesAnActiveConnectionExist(for: waiterEL) {
+                        // if there is a connection for the waiter, we can continue. because this 
+                        // waiter will be picked up by another connection in the future point. 
+                        // Forward progress is guaranteed.
+                        continue
+                    }
+
+                    guard case .none = connectionAction else {
+                        // while we were in this loop, we already identified another connection 
+                        // action that we will do. however we are looking for a waiter that we can
+                        // execute on right now.
+                    }
+
+                    if self.connections.count < self.maximumConcurrentConnections {
+                        // if there are less than `maximumConcurrentConnections`, we can start a new
+                        // connection for this waiter.
+                        let newConnectionID = self.idGenerator.next()
+                        connectionAction = .createConnection(newConnectionID, on: waiterEL)
+                        // we might find a task that we can execute right now.
+                        continue
+                    }
+
+                    assert(self.connections.count == self.maximumConcurrentConnections)
+                    // if we are at the connection maximum, and there is no connection for the 
+                    // waiter, we must close our new idle connection and create a new connection
+                    // on the correct EL.
+
+                    let newConnectionID = self.idGenerator.next()
+                    var replacement = HTTP1ConnectionState(connectionID: newConnectionID, eventLoop: waiterEL)
+                    swap(&replacement, &connection)
+                    connectionAction = .replaceConnection(replacement.close(), with: newConnectionID, on: waiterEL)
+                }
+            }
+
+            // we were not able to find a task action, but we may have a connection action
+            return .init(.none, connectionAction)
         }
 
         mutating func failedToCreateNewConnection(_ error: Error, connectionID: Connection.ID) -> Action {
@@ -396,10 +443,7 @@ extension HTTPConnectionPool {
 
             switch self.state {
             case .running:
-                var requestAction: StateMachine.RequestAction = .none
-                if let failedWaiter = connectionState.failedToStart() {
-                    requestAction = .failRequest(failedWaiter.request, error, cancelWaiter: failedWaiter.requestID)
-                }
+                connectionState.failedToStart()
 
                 if let nextWaiter = self.waiters.popFirst() {
                     assert(self.connections.count == self.maximumConcurrentConnections,
@@ -408,8 +452,7 @@ extension HTTPConnectionPool {
                     let eventLoop = nextWaiter.eventLoopRequirement ?? connectionState.eventLoop
                     let newConnectionState = HTTP1ConnectionState(
                         connectionID: self.idGenerator.next(),
-                        eventLoop: eventLoop,
-                        waiter: nextWaiter
+                        eventLoop: eventLoop
                     )
                     self.connections[index] = newConnectionState
                     return .init(requestAction, .createConnection(newConnectionState.connectionID, on: eventLoop))
@@ -419,10 +462,6 @@ extension HTTPConnectionPool {
                 return .init(requestAction, .none)
 
             case .shuttingDown(unclean: let unclean):
-                guard connectionState.failedToStart() == nil else {
-                    preconditionFailure("Expected to remove the waiter when shutdown is issued")
-                }
-
                 self.connections.remove(at: index)
                 let isShutdown: StateMachine.ConnectionAction.IsShutdown
                 if self.connections.isEmpty {

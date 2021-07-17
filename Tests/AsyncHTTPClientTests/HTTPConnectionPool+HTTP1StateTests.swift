@@ -503,7 +503,7 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
         let action = state.shutdown()
         XCTAssertEqual(.none, action.request)
 
-        guard case .cleanupConnection(close: let close, cancel: [], isShutdown: .yes(unclean: false)) = action.connection else {
+        guard case .cleanupConnections(close: let close, cancel: [], isShutdown: .yes(unclean: false)) = action.connection else {
             return XCTFail("Unexpected connection event: \(action.connection)")
         }
 

@@ -33,14 +33,31 @@ extension HTTPConnectionPool {
                 case no
             }
 
+            struct CleanupContext {
+                /// the connection to close right away. These are idle.
+                var close: [Connection]
+
+                /// the connections that currently run a request that needs to be cancelled to close the connections
+                var cancel: [Connection]
+
+                /// the connections that are backing off from connection creation
+                var connectBackoff: [Connection.ID]
+
+                init(close: [Connection] = [], cancel: [Connection] = [], connectBackoff: [Connection.ID] = []) {
+                    self.close = close
+                    self.cancel = cancel
+                    self.connectBackoff = connectBackoff
+                }
+            }
+
             case createConnection(Connection.ID, on: EventLoop)
-            case replaceConnection(Connection, with: Connection.ID, on: EventLoop)
+            case scheduleBackoffTimer(Connection.ID, backoff: TimeAmount, on: EventLoop)
 
             case scheduleTimeoutTimer(Connection.ID)
             case cancelTimeoutTimer(Connection.ID)
 
             case closeConnection(Connection, isShutdown: IsShutdown)
-            case cleanupConnection(close: [Connection], cancel: [Connection], isShutdown: IsShutdown)
+            case cleanupConnections(CleanupContext, isShutdown: IsShutdown)
 
             case none
         }
@@ -107,11 +124,15 @@ extension HTTPConnectionPool {
             }
         }
 
-        mutating func failedToCreateNewConnection(_ error: Error, connectionID: Connection.ID) -> Action {
+        mutating func failedToCreateNewConnection(_ error: Error, connectionID: Connection.ID, on eventLoop: EventLoop) -> Action {
             switch self.state {
             case .http1(var http1StateMachine):
                 return self.state.modify { state -> Action in
-                    let action = http1StateMachine.failedToCreateNewConnection(error, connectionID: connectionID)
+                    let action = http1StateMachine.failedToCreateNewConnection(
+                        error,
+                        connectionID: connectionID,
+                        on: eventLoop
+                    )
                     state = .http1(http1StateMachine)
                     return action
                 }
@@ -149,11 +170,11 @@ extension HTTPConnectionPool {
             }
         }
 
-        mutating func connectionTimeout(_ connectionID: Connection.ID) -> Action {
+        mutating func connectionIdleTimeout(_ connectionID: Connection.ID) -> Action {
             switch self.state {
             case .http1(var http1StateMachine):
                 return self.state.modify { state -> Action in
-                    let action = http1StateMachine.connectionTimeout(connectionID)
+                    let action = http1StateMachine.connectionIdleTimeout(connectionID)
                     state = .http1(http1StateMachine)
                     return action
                 }

@@ -32,7 +32,6 @@ extension AsyncRequestBag {
             case queued(UnsafeContinuation<AsyncResponse, Error>, HTTPRequestScheduler)
             case executing(ExecutionContext, RequestStreamState, ResponseStreamState)
             case finished(error: Error?, AsyncResponse.Body.IteratorStream.ID?)
-            case modifying
         }
 
         fileprivate enum RequestStreamState {
@@ -159,9 +158,6 @@ extension AsyncRequestBag {
             case .finished(error: _, _):
                 return .none
 
-            case .modifying:
-                preconditionFailure("Invalid state")
-
             case .executing(let context, _, .finished(let streamID, let continuation)):
                 self.state = .finished(error: error, streamID)
                 return .failResponseStream(continuation, error, context.executor)
@@ -185,8 +181,7 @@ extension AsyncRequestBag {
             case .initialized,
                  .executing,
                  .finished(error: .none, _),
-                 .finished(error: .some, .some),
-                 .modifying:
+                 .finished(error: .some, .some):
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
@@ -225,9 +220,6 @@ extension AsyncRequestBag {
 
             case .finished:
                 return .none
-
-            case .modifying:
-                preconditionFailure("Invalid state")
             }
         }
 
@@ -248,9 +240,6 @@ extension AsyncRequestBag {
                 // the channels writability changed to writable after we have forwarded all the
                 // request bytes. Can be ignored.
                 break
-
-            case .modifying:
-                preconditionFailure("Invalid state")
             }
         }
 
@@ -276,9 +265,6 @@ extension AsyncRequestBag {
 
             case .finished:
                 return .ignore
-
-            case .modifying:
-                preconditionFailure("Invalid state")
             }
         }
 
@@ -317,9 +303,6 @@ extension AsyncRequestBag {
 
             case .finished:
                 return .none
-
-            case .modifying:
-                preconditionFailure("Invalid state")
             }
         }
 
@@ -344,9 +327,6 @@ extension AsyncRequestBag {
 
             case .finished:
                 return .none
-
-            case .modifying:
-                preconditionFailure("Invalid state")
             }
         }
 
@@ -377,9 +357,6 @@ extension AsyncRequestBag {
             case .executing(_, _, .finished),
                  .finished(error: .none, _):
                 preconditionFailure("How can the request be finished without error, before receiving response head?")
-
-            case .modifying:
-                preconditionFailure("Invalid state")
             }
         }
 
@@ -400,7 +377,6 @@ extension AsyncRequestBag {
                     preconditionFailure("If we have received an error or eof before, why did we get another body part? Next: \(next)")
                 }
 
-                self.state = .modifying
                 if currentBuffer.isEmpty {
                     currentBuffer = buffer
                 } else {
@@ -414,7 +390,6 @@ extension AsyncRequestBag {
                     preconditionFailure("If we have received an error or eof before, why did we get another body part? Next: \(next)")
                 }
 
-                self.state = .modifying
                 if currentBuffer.isEmpty {
                     currentBuffer = buffer
                 } else {
@@ -434,8 +409,6 @@ extension AsyncRequestBag {
             case .executing(_, _, .finished),
                  .finished(error: .none, _):
                 preconditionFailure("How can the request be finished without error, before receiving response head?")
-            case .modifying:
-                preconditionFailure("Invalid state")
             }
         }
 
@@ -466,7 +439,6 @@ extension AsyncRequestBag {
                     self.state = .executing(context, requestState, .waitingForRemote(streamID, continuation))
                     return .askExecutorForMore(context.executor)
                 } else {
-                    self.state = .modifying
                     let toReturn = buffer.removeFirst()
                     self.state = .executing(context, requestState, .buffering(streamID, buffer, next: .askExecutorForMore))
                     return .succeedContinuation(continuation, toReturn)
@@ -482,7 +454,6 @@ extension AsyncRequestBag {
 
             case .executing(let context, let requestState, .waitingForStream(var buffer, next: .eof)):
                 assert(!buffer.isEmpty)
-                self.state = .modifying
                 let toReturn = buffer.removeFirst()
                 self.state = .executing(context, requestState, .buffering(streamID, buffer, next: .eof))
                 return .succeedContinuation(continuation, toReturn)
@@ -492,7 +463,6 @@ extension AsyncRequestBag {
                     self.state = .executing(context, requestState, .waitingForRemote(streamID, continuation))
                     return .askExecutorForMore(context.executor)
                 } else {
-                    self.state = .modifying
                     let toReturn = buffer.removeFirst()
                     self.state = .executing(context, requestState, .buffering(streamID, buffer, next: .askExecutorForMore))
                     return .succeedContinuation(continuation, toReturn)
@@ -514,7 +484,6 @@ extension AsyncRequestBag {
 
             case .executing(let context, let requestState, .buffering(let streamID, var buffer, next: .eof)):
                 assert(!buffer.isEmpty)
-                self.state = .modifying
                 let toReturn = buffer.removeFirst()
                 self.state = .executing(context, requestState, .buffering(streamID, buffer, next: .eof))
                 return .succeedContinuation(continuation, toReturn)
@@ -535,8 +504,6 @@ extension AsyncRequestBag {
                     return .failContinuation(continuation, TriedToRegisteredASecondConsumer())
                 }
                 return .succeedContinuation(continuation, nil)
-            case .modifying:
-                preconditionFailure("Invalid state")
             }
         }
 
@@ -556,7 +523,6 @@ extension AsyncRequestBag {
 
             case .executing(let context, let requestState, .waitingForStream(var buffer, next: .askExecutorForMore)):
                 if let newChunks = newChunks, !newChunks.isEmpty {
-                    self.state = .modifying
                     buffer.append(contentsOf: newChunks)
                 }
                 self.state = .executing(context, requestState, .waitingForStream(buffer, next: .eof))
@@ -564,7 +530,6 @@ extension AsyncRequestBag {
 
             case .executing(let context, let requestState, .waitingForRemote(let streamID, let continuation)):
                 if var newChunks = newChunks, !newChunks.isEmpty {
-                    self.state = .modifying
                     let first = newChunks.removeFirst()
                     self.state = .executing(context, requestState, .buffering(streamID, newChunks, next: .eof))
                     return .succeedContinuation(continuation, first)
@@ -575,7 +540,6 @@ extension AsyncRequestBag {
 
             case .executing(let context, let requestState, .buffering(let streamID, var buffer, next: .askExecutorForMore)):
                 if let newChunks = newChunks, !newChunks.isEmpty {
-                    self.state = .modifying
                     buffer.append(contentsOf: newChunks)
                 }
                 self.state = .executing(context, requestState, .buffering(streamID, buffer, next: .eof))
@@ -586,8 +550,6 @@ extension AsyncRequestBag {
 
             case .finished(error: .none, _):
                 preconditionFailure("How can the request be finished without error, before receiving response head?")
-            case .modifying:
-                preconditionFailure("Invalid state")
 
             case .executing(_, _, .waitingForStream(_, next: .error)),
                  .executing(_, _, .waitingForStream(_, next: .eof)),

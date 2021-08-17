@@ -26,14 +26,13 @@ extension HTTPConnectionPool_HTTP1StateMachineTests {
     static var allTests: [(String, (HTTPConnectionPool_HTTP1StateMachineTests) -> () throws -> Void)] {
         return [
             ("testCreatingAndFailingConnections", testCreatingAndFailingConnections),
-            ("testForExactEventLoopRequirementsNewConnectionsAreCreatedUntilFullLaterOldestReplaced", testForExactEventLoopRequirementsNewConnectionsAreCreatedUntilFullLaterOldestReplaced),
             ("testWaitersAreCreatedIfAllConnectionsAreInUseAndWaitersAreDequeuedInOrder", testWaitersAreCreatedIfAllConnectionsAreInUseAndWaitersAreDequeuedInOrder),
             ("testBestConnectionIsPicked", testBestConnectionIsPicked),
             ("testConnectionAbortIsIgnoredIfThereAreNoWaiters", testConnectionAbortIsIgnoredIfThereAreNoWaiters),
             ("testConnectionCloseLeadsToTumbleWeedIfThereNoWaiters", testConnectionCloseLeadsToTumbleWeedIfThereNoWaiters),
             ("testConnectionAbortLeadsToNewConnectionsIfThereAreWaiters", testConnectionAbortLeadsToNewConnectionsIfThereAreWaiters),
             ("testParkedConnectionTimesOut", testParkedConnectionTimesOut),
-            ("testConnectionPoolFullOfParkedConnectionsIsShutdownImmidiatly", testConnectionPoolFullOfParkedConnectionsIsShutdownImmidiatly),
+            ("testConnectionPoolFullOfParkedConnectionsIsShutdownImmediately", testConnectionPoolFullOfParkedConnectionsIsShutdownImmediately),
             ("testParkedConnectionTimesOutButIsAlsoClosedByRemote", testParkedConnectionTimesOutButIsAlsoClosedByRemote),
         ]
     }

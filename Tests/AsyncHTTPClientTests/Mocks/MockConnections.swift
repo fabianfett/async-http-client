@@ -415,13 +415,16 @@ struct MockConnections {
 
             let request = try waiters.get(waiterID, request: mockRequest)
             try connections.execute(request, on: newConnection)
-            try connections.finishExecution(connectionID)
+        }
+        
+        while let connection = connections.randomLeasedConnection() {
+            try connections.finishExecution(connection.id)
 
-            guard state.http1ConnectionReleased(connectionID) == .init(.none, .scheduleTimeoutTimer(connectionID)) else {
+            guard state.http1ConnectionReleased(connection.id) == .init(.none, .scheduleTimeoutTimer(connection.id)) else {
                 throw SetupError.expectedConnectionToBeParked
             }
 
-            try connections.parkConnection(connectionID)
+            try connections.parkConnection(connection.id)
         }
 
         return (connections, state)

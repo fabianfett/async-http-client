@@ -33,7 +33,7 @@ extension HTTPConnectionPool {
                 case no
             }
 
-            struct CleanupContext {
+            struct CleanupContext: Equatable {
                 /// the connection to close right away. These are idle.
                 var close: [Connection]
 

@@ -457,7 +457,7 @@ extension HTTPConnectionPool {
 
             switch self.state {
             case .running:
-                guard self.queue.isEmpty else {
+                guard !self.queue.isEmpty else {
                     return .init(.none, .scheduleTimeoutTimer(self.connections[index].connectionID))
                 }
 

@@ -83,6 +83,9 @@ extension HTTPConnectionPool.StateMachine.ConnectionAction: Equatable {
         switch (lhs, rhs) {
         case (.createConnection(let lhsConnectionID, let lhsEventLoop), .createConnection(let rhsConnectionID, let rhsEventLoop)):
             return (lhsEventLoop === rhsEventLoop) && (lhsConnectionID == rhsConnectionID)
+        case (.scheduleBackoffTimer(let lhsConnectionID, let lhsTimeAmount, let lhsEventLoop),
+              .scheduleBackoffTimer(let rhsConnectionID, let rhsTimeAmount, let rhsEventLoop)):
+            return lhsConnectionID == rhsConnectionID && lhsTimeAmount == rhsTimeAmount && lhsEventLoop === rhsEventLoop
         case (.closeConnection(let lhsConnection, let lhsShutdown), .closeConnection(let rhsConnection, let rhsShutdown)):
             return lhsConnection == rhsConnection && lhsShutdown == rhsShutdown
         case (.scheduleTimeoutTimer(let lhsConnectionID), .scheduleTimeoutTimer(let rhsConnectionID)):

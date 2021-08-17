@@ -124,14 +124,13 @@ extension HTTPConnectionPool {
             }
         }
 
-        mutating func failedToCreateNewConnection(_ error: Error, connectionID: Connection.ID, on eventLoop: EventLoop) -> Action {
+        mutating func failedToCreateNewConnection(_ error: Error, connectionID: Connection.ID) -> Action {
             switch self.state {
             case .http1(var http1StateMachine):
                 return self.state.modify { state -> Action in
                     let action = http1StateMachine.failedToCreateNewConnection(
                         error,
-                        connectionID: connectionID,
-                        on: eventLoop
+                        connectionID: connectionID
                     )
                     state = .http1(http1StateMachine)
                     return action

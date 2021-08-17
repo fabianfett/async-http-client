@@ -239,14 +239,14 @@ extension HTTPConnectionPool {
             return self.nextActionForIdleConnection(connectionIndex: index)
         }
 
-        mutating func failedToCreateNewConnection(_ error: Error, connectionID: Connection.ID, on eventLoop: EventLoop) -> Action {
+        mutating func failedToCreateNewConnection(_ error: Error, connectionID: Connection.ID) -> Action {
             guard let index = self.connections.firstIndex(where: { $0.connectionID == connectionID }) else {
                 preconditionFailure("We tried to create a new connection, that we know nothing about?")
             }
 
             switch self.state {
             case .running:
-                assert(self.connections[index].eventLoop === eventLoop)
+                let eventLoop = self.connections[index].eventLoop
                 let retries = self.connections[index].failedToStart()
 
                 let backoff = TimeAmount.milliseconds(100) * (2 ^ retries)
@@ -538,71 +538,3 @@ extension HTTPConnectionPool.HTTP1StateMachine: CustomStringConvertible {
         return "connections: [starting: \(starting) | leased: \(leased) | parked: \(parked)], waiters: \(waiters)"
     }
 }
-
-// extension HTTPConnectionPool.HTTP1StateMachine {
-//
-//    struct EventLoopState {
-//
-//        let eventLoop: EventLoop
-//
-//        var queue: CircularBuffer<HTTPConnectionPool.Waiter>
-//        var connections: [HTTPConnectionPool.HTTP1ConnectionState]
-//
-//        init(eventLoop: EventLoop) {
-//            self.eventLoop = eventLoop
-//
-//            self.queue = CircularBuffer(initialCapacity: 32)
-//            self.connections = [HTTPConnectionPool.HTTP1ConnectionState]()
-//            self.connections.reserveCapacity(8)
-//        }
-//
-//        mutating func executeRequest(
-//            _ request: HTTPSchedulableRequest,
-//        ) -> Action {
-//
-//            if self.connections.
-//
-//        }
-//
-//        mutating func newHTTP1ConnectionCreated(_ connection: Connection) -> Action {
-//
-//
-//
-//        }
-//
-//        mutating func failedToCreateNewConnection(_ error: Error, connectionID: Connection.ID) -> Action {
-//
-//        }
-//
-//        mutating func connectionClosed(_ connectionID: Connection.ID) -> Action {
-//            switch self.state {
-//            case .http1(var http1StateMachine):
-//                return self.state.modify { state -> Action in
-//                    let action = http1StateMachine.connectionClosed(connectionID)
-//                    state = .http1(http1StateMachine)
-//                    return action
-//                }
-//
-//            case .modify:
-//                preconditionFailure("Invalid state")
-//            }
-//        }
-//
-//        mutating func http1ConnectionReleased(_ connectionID: Connection.ID) -> Action {
-//            guard case .http1(var http1StateMachine) = self.state else {
-//                preconditionFailure("Invalid state")
-//            }
-//
-//            return self.state.modify { state -> Action in
-//                let action = http1StateMachine.http1ConnectionReleased(connectionID)
-//                state = .http1(http1StateMachine)
-//                return action
-//            }
-//        }
-//
-//
-//    }
-//
-//
-//
-// }

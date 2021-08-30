@@ -161,7 +161,7 @@ class HTTPConnectionPool {
          key: ConnectionPool.Key,
          delegate: HTTPConnectionPoolDelegate,
          idGenerator: Connection.ID.Generator,
-         logger: Logger) {
+         backgroundActivityLogger logger: Logger) {
         self.eventLoopGroup = eventLoopGroup
         self.connectionFactory = ConnectionFactory(
             key: key,
@@ -183,8 +183,8 @@ class HTTPConnectionPool {
         )
     }
 
-    func execute(request: HTTPSchedulableRequest) {
-        let (eventLoop, required) = request.resolveEventLoop()
+    func executeRequest(_ request: HTTPSchedulableRequest) {
+        let (eventLoop, required) = self.resolveEventLoop(for: request)
 
         let action = self.stateLock.withLock { () -> StateMachine.Action in
             self._state.executeRequest(request, onPreferred: eventLoop, required: required)
@@ -412,15 +412,16 @@ class HTTPConnectionPool {
         backoffTimer?.cancel()
     }
 
-    private func resolveEventLoop() -> (EventLoop, Bool) {
-        switch self.eventLoopPreference.preference {
+    private func resolveEventLoop(for request: HTTPSchedulableRequest) -> (EventLoop, Bool) {
+        switch request.eventLoopPreference.preference {
         case .indifferent:
             // TBD: Is there a better solution than `next()` here?
             return (self.eventLoopGroup.next(), false)
         case .delegate(let el):
             return (el, false)
         case .delegateAndChannel(let el), .testOnly_exact(let el, _):
-            return (el, true)
+            #warning("this is wrong fix me!")
+            return (el, false)
         }
     }
 }

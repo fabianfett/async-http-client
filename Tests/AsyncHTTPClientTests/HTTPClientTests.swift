@@ -594,10 +594,8 @@ class HTTPClientTests: XCTestCase {
     }
 
     func testDeadline() throws {
-        XCTAssertThrowsError(try self.defaultClient.get(url: self.defaultHTTPBinURLPrefix + "wait", deadline: .now() + .milliseconds(150)).wait(), "Should fail") { error in
-            guard case let error = error as? HTTPClientError, error == .readTimeout else {
-                return XCTFail("Should fail with readTimeout")
-            }
+        XCTAssertThrowsError(try self.defaultClient.get(url: self.defaultHTTPBinURLPrefix + "wait", deadline: .now() + .milliseconds(150)).wait(), "Should fail") {
+            XCTAssertEqual($0 as? HTTPClientError, .readTimeout)
         }
     }
 

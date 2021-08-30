@@ -17,12 +17,13 @@ import Logging
 import NIO
 import NIOHTTP1
 
-struct MockConnections {
+struct MockConnectionPool {
     typealias Connection = HTTPConnectionPool.Connection
 
     enum Errors: Error {
         case connectionIDAlreadyUsed
         case connectionNotFound
+        case connectionExists
         case connectionNotIdle
         case connectionAlreadyParked
         case connectionNotParked
@@ -31,6 +32,8 @@ struct MockConnections {
         case connectionIsNotStarting
         case connectionIsNotExecuting
         case connectionDoesNotFulFillEventLoopRequirement
+        case connectionBackoffTimerExists
+        case connectionBackoffTimerNotFound
     }
 
     private struct MockConnection {
@@ -65,39 +68,33 @@ struct MockConnections {
 
         var isIdle: Bool {
             switch self.state {
-            case .starting:
+            case .starting, .closed:
                 return false
             case .http1(let leased, _):
                 return !leased
             case .http2(_, let used):
                 return used == 0
-            case .closed:
-                return false
             }
         }
 
         var isLeased: Bool {
             switch self.state {
-            case .starting:
+            case .starting, .closed:
                 return false
             case .http1(let leased, _):
                 return leased
             case .http2(_, let used):
                 return used > 0
-            case .closed:
-                return false
             }
         }
 
         var lastReturned: NIODeadline? {
             switch self.state {
-            case .starting:
+            case .starting, .closed:
                 return nil
             case .http1(_, let lastReturn):
                 return lastReturn
             case .http2:
-                return nil
-            case .closed:
                 return nil
             }
         }
@@ -206,6 +203,7 @@ struct MockConnections {
     }
 
     private var connections = [MockConnection.ID: MockConnection]()
+    private var backoff = Set<MockConnection.ID>()
 
     init() {}
 
@@ -257,28 +255,13 @@ struct MockConnections {
         self.connections.values.filter { $0.eventLoop === eventLoop }.count
     }
 
+    // MARK: Connection creation
+
     mutating func createConnection(_ connectionID: Connection.ID, on eventLoop: EventLoop) throws {
         guard self.connections[connectionID] == nil else {
             throw Errors.connectionIDAlreadyUsed
         }
         self.connections[connectionID] = .init(id: connectionID, eventLoop: eventLoop)
-    }
-
-    /// Closing a connection signals intend. For this reason, it is verified, that the connection is not running any
-    /// requests when closing.
-    mutating func closeConnection(_ connection: Connection) throws {
-        guard var mockConnection = self.connections.removeValue(forKey: connection.id) else {
-            throw Errors.connectionNotFound
-        }
-
-        try mockConnection.close()
-    }
-
-    /// Aborting a connection does not verify if the connection does anything right now
-    mutating func abortConnection(_ connectionID: Connection.ID) throws {
-        guard self.connections.removeValue(forKey: connectionID) != nil else {
-            throw Errors.connectionNotFound
-        }
     }
 
     mutating func succeedConnectionCreationHTTP1(_ connectionID: Connection.ID) throws -> HTTPConnectionPool.Connection {
@@ -302,6 +285,45 @@ struct MockConnections {
 
         self.connections[connection.id] = nil
     }
+
+    mutating func startConnectionBackoffTimer(_ connectionID: Connection.ID) throws {
+        guard self.connections[connectionID] == nil else {
+            throw Errors.connectionExists
+        }
+
+        guard !self.backoff.contains(connectionID) else {
+            throw Errors.connectionBackoffTimerExists
+        }
+
+        self.backoff.insert(connectionID)
+    }
+
+    mutating func connectionBackoffTimerDone(_ connectionID: Connection.ID) throws {
+        guard self.backoff.remove(connectionID) != nil else {
+            throw Errors.connectionBackoffTimerNotFound
+        }
+    }
+
+    // MARK: Connection destruction
+
+    /// Closing a connection signals intend. For this reason, it is verified, that the connection is not running any
+    /// requests when closing.
+    mutating func closeConnection(_ connection: Connection) throws {
+        guard var mockConnection = self.connections.removeValue(forKey: connection.id) else {
+            throw Errors.connectionNotFound
+        }
+
+        try mockConnection.close()
+    }
+
+    /// Aborting a connection does not verify if the connection does anything right now
+    mutating func abortConnection(_ connectionID: Connection.ID) throws {
+        guard self.connections.removeValue(forKey: connectionID) != nil else {
+            throw Errors.connectionNotFound
+        }
+    }
+
+    // MARK: Connection usage
 
     mutating func parkConnection(_ connectionID: Connection.ID) throws {
         guard var connection = self.connections[connectionID] else {
@@ -346,6 +368,13 @@ struct MockConnections {
             .map(\.id)
     }
 
+    mutating func randomActiveConnection() -> HTTPConnectionPool.Connection.ID? {
+        self.connections.values
+            .filter { $0.isLeased || $0.isParked }
+            .randomElement()
+            .map(\.id)
+    }
+
     mutating func randomParkedConnection() -> HTTPConnectionPool.Connection? {
         self.connections.values
             .filter { $0.isParked }
@@ -358,6 +387,19 @@ struct MockConnections {
             .filter { $0.isLeased }
             .randomElement()
             .flatMap { .__testOnly_connection(id: $0.id, eventLoop: $0.eventLoop) }
+    }
+
+    func randomBackingOffConnection() -> HTTPConnectionPool.Connection.ID? {
+        self.backoff.randomElement()
+    }
+
+    mutating func closeRandomActiveConnection() -> HTTPConnectionPool.Connection.ID? {
+        guard let connectionID = self.randomActiveConnection() else {
+            return nil
+        }
+
+        self.connections.removeValue(forKey: connectionID)
+        return connectionID
     }
 
     enum SetupError: Error {
@@ -380,7 +422,7 @@ struct MockConnections {
             idGenerator: .init(),
             maximumConcurrentHTTP1Connections: maxNumberOfConnections
         )
-        var connections = MockConnections()
+        var connections = MockConnectionPool()
         var waiters = MockWaiters()
 
         for _ in 0..<numberOfConnections {
@@ -416,7 +458,7 @@ struct MockConnections {
             let request = try waiters.get(waiterID, request: mockRequest)
             try connections.execute(request, on: newConnection)
         }
-        
+
         while let connection = connections.randomLeasedConnection() {
             try connections.finishExecution(connection.id)
 
@@ -484,6 +526,18 @@ struct MockWaiters {
             throw Errors.waiterIDDoesNotMatchTask
         }
         return waiter.request
+    }
+
+    @discardableResult
+    mutating func cancel(_ id: RequestID) throws -> HTTPSchedulableRequest {
+        guard let waiter = self.waiters.removeValue(forKey: id) else {
+            throw Errors.waiterIDNotFound
+        }
+        return waiter.request
+    }
+
+    func randomWaiter() -> RequestID? {
+        self.waiters.randomElement().map(\.0)
     }
 }
 

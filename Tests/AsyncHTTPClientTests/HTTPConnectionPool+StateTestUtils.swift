@@ -92,6 +92,8 @@ extension HTTPConnectionPool.StateMachine.ConnectionAction: Equatable {
             return lhsConnectionID == rhsConnectionID
         case (.cancelTimeoutTimer(let lhsConnectionID), .cancelTimeoutTimer(let rhsConnectionID)):
             return lhsConnectionID == rhsConnectionID
+        case (.cleanupConnections(let lhsContext, isShutdown: let lhsShutdown), .cleanupConnections(let rhsContext, isShutdown: let rhsShutdown)):
+            return lhsContext == rhsContext && lhsShutdown == rhsShutdown
         case (.none, .none):
             return true
         default:

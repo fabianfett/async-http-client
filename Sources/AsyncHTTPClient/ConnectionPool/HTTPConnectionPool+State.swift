@@ -25,6 +25,10 @@ extension HTTPConnectionPool {
                 self.request = request
                 self.connection = connection
             }
+
+            static var none: Action {
+                return .init(.none, .none)
+            }
         }
 
         enum ConnectionAction {
@@ -106,7 +110,7 @@ extension HTTPConnectionPool {
                 }
 
             case .modify:
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
@@ -120,7 +124,7 @@ extension HTTPConnectionPool {
                 }
 
             case .modify:
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
@@ -137,7 +141,21 @@ extension HTTPConnectionPool {
                 }
 
             case .modify:
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
+            }
+        }
+
+        mutating func connectionCreationBackoffDone(_ connectionID: Connection.ID) -> Action {
+            switch self.state {
+            case .http1(var http1StateMachine):
+                return self.state.modify { state -> Action in
+                    let action = http1StateMachine.connectionCreationBackoffDone(connectionID)
+                    state = .http1(http1StateMachine)
+                    return action
+                }
+
+            case .modify:
+                preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
@@ -151,7 +169,7 @@ extension HTTPConnectionPool {
                 }
 
             case .modify:
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
@@ -165,7 +183,7 @@ extension HTTPConnectionPool {
                 }
 
             case .modify:
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
@@ -179,7 +197,7 @@ extension HTTPConnectionPool {
                 }
 
             case .modify:
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
@@ -194,13 +212,13 @@ extension HTTPConnectionPool {
                 }
 
             case .modify:
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
         mutating func http1ConnectionReleased(_ connectionID: Connection.ID) -> Action {
             guard case .http1(var http1StateMachine) = self.state else {
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
             }
 
             return self.state.modify { state -> Action in
@@ -226,7 +244,7 @@ extension HTTPConnectionPool {
                 }
 
             case .modify:
-                preconditionFailure("Invalid state")
+                preconditionFailure("Invalid state: \(self.state)")
             }
         }
     }
@@ -251,7 +269,7 @@ extension HTTPConnectionPool.StateMachine: CustomStringConvertible {
             return ".http1(\(http1))"
 
         case .modify:
-            preconditionFailure("Invalid state")
+            preconditionFailure("Invalid state: \(self.state)")
         }
     }
 }

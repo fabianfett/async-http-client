@@ -26,6 +26,9 @@ extension HTTPConnectionPool_HTTP1StateMachineTests {
     static var allTests: [(String, (HTTPConnectionPool_HTTP1StateMachineTests) -> () throws -> Void)] {
         return [
             ("testCreatingAndFailingConnections", testCreatingAndFailingConnections),
+            ("testConnectionFailureBackoff", testConnectionFailureBackoff),
+            ("testCancelRequestWorks", testCancelRequestWorks),
+            ("testExecuteOnShuttingDownPool", testExecuteOnShuttingDownPool),
             ("testWaitersAreCreatedIfAllConnectionsAreInUseAndWaitersAreDequeuedInOrder", testWaitersAreCreatedIfAllConnectionsAreInUseAndWaitersAreDequeuedInOrder),
             ("testBestConnectionIsPicked", testBestConnectionIsPicked),
             ("testConnectionAbortIsIgnoredIfThereAreNoWaiters", testConnectionAbortIsIgnoredIfThereAreNoWaiters),

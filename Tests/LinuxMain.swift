@@ -42,6 +42,7 @@ import XCTest
         testCase(HTTPClientTests.allTests),
         testCase(HTTPConnectionPool_FactoryTests.allTests),
         testCase(HTTPConnectionPool_HTTP1StateMachineTests.allTests),
+        testCase(HTTPConnectionPool_StateMachineFuzzTests.allTests),
         testCase(HTTPConnectionPool_WaiterTests.allTests),
         testCase(HTTPRequestStateMachineTests.allTests),
         testCase(LRUCacheTests.allTests),

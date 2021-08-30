@@ -17,8 +17,10 @@ import NIO
 extension HTTPConnectionPool {
     struct HTTP1ConnectionState {
         enum State {
-            case waitingToStart(retries: Int)
+            /// the connection is creating a connection. Valid transitions are to: .backingOff, .available and .failed
             case starting(retries: Int)
+            /// the connection is waiting to retry the establishing a connection. Valid transitions to: .starting and .closed
+            case backingOff(retries: Int)
             case available(Connection, since: NIODeadline)
             case leased(Connection)
             case failed
@@ -26,20 +28,29 @@ extension HTTPConnectionPool {
         }
 
         private var state: State
+        private(set) var connectionID: Connection.ID
         let eventLoop: EventLoop
-        let connectionID: Connection.ID
 
-        init(connectionID: Connection.ID, eventLoop: EventLoop) {
+        init(connectionID: Connection.ID, eventLoop: EventLoop, retries: Int = 0) {
             self.connectionID = connectionID
             self.eventLoop = eventLoop
-            self.state = .starting(retries: 0)
+            self.state = .starting(retries: retries)
         }
 
-        var isStarting: Bool {
+        var isConnecting: Bool {
             switch self.state {
-            case .starting, .waitingToStart:
+            case .starting:
                 return true
-            case .failed, .closed, .available, .leased:
+            case .backingOff, .failed, .closed, .available, .leased:
+                return false
+            }
+        }
+
+        var isBackingOff: Bool {
+            switch self.state {
+            case .backingOff:
+                return true
+            case .starting, .failed, .closed, .available, .leased:
                 return false
             }
         }
@@ -48,7 +59,7 @@ extension HTTPConnectionPool {
             switch self.state {
             case .available:
                 return true
-            case .waitingToStart, .starting, .leased, .failed, .closed:
+            case .backingOff, .starting, .leased, .failed, .closed:
                 return false
             }
         }
@@ -57,7 +68,7 @@ extension HTTPConnectionPool {
             switch self.state {
             case .leased:
                 return true
-            case .waitingToStart, .starting, .available, .failed, .closed:
+            case .backingOff, .starting, .available, .failed, .closed:
                 return false
             }
         }
@@ -66,7 +77,7 @@ extension HTTPConnectionPool {
             switch self.state {
             case .available(_, since: let lastReturn):
                 return lastReturn
-            case .waitingToStart, .starting, .leased, .failed, .closed:
+            case .backingOff, .starting, .leased, .failed, .closed:
                 return nil
             }
         }
@@ -75,7 +86,7 @@ extension HTTPConnectionPool {
             switch self.state {
             case .starting:
                 self.state = .available(connection, since: .now())
-            case .waitingToStart, .available, .leased, .failed, .closed:
+            case .backingOff, .available, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
@@ -85,9 +96,19 @@ extension HTTPConnectionPool {
         mutating func failedToStart() -> Int {
             switch self.state {
             case .starting(let retries):
-                self.state = .waitingToStart(retries: retries + 1)
+                self.state = .backingOff(retries: retries + 1)
                 return retries
-            case .waitingToStart, .available, .leased, .failed, .closed:
+            case .backingOff, .available, .leased, .failed, .closed:
+                preconditionFailure("Invalid state: \(self.state)")
+            }
+        }
+
+        mutating func retryConnecting(newConnectionID: Connection.ID) {
+            switch self.state {
+            case .backingOff(let retries):
+                self.connectionID = newConnectionID
+                self.state = .starting(retries: retries)
+            case .starting, .available, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
@@ -97,7 +118,7 @@ extension HTTPConnectionPool {
             case .available(let connection, since: _):
                 self.state = .leased(connection)
                 return connection
-            case .waitingToStart, .starting, .leased, .failed, .closed:
+            case .backingOff, .starting, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
@@ -106,7 +127,7 @@ extension HTTPConnectionPool {
             switch self.state {
             case .leased(let connection):
                 self.state = .available(connection, since: .now())
-            case .waitingToStart, .starting, .available, .failed, .closed:
+            case .backingOff, .starting, .available, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
@@ -116,7 +137,7 @@ extension HTTPConnectionPool {
             case .available(let connection, since: _):
                 self.state = .closed
                 return connection
-            case .waitingToStart, .starting, .leased, .failed, .closed:
+            case .backingOff, .starting, .leased, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
@@ -125,14 +146,14 @@ extension HTTPConnectionPool {
             switch self.state {
             case .leased(let connection):
                 return connection
-            case .waitingToStart, .starting, .available, .failed, .closed:
+            case .backingOff, .starting, .available, .failed, .closed:
                 preconditionFailure("Invalid state: \(self.state)")
             }
         }
 
         mutating func cleanup(_ context: inout StateMachine.ConnectionAction.CleanupContext) -> Bool {
             switch self.state {
-            case .waitingToStart:
+            case .backingOff:
                 context.connectBackoff.append(self.connectionID)
                 return true
             case .starting:
@@ -250,7 +271,9 @@ extension HTTPConnectionPool {
                 let retries = self.connections[index].failedToStart()
 
                 let backoff = TimeAmount.milliseconds(100) * (2 ^ retries)
-                return .init(.none, .scheduleBackoffTimer(connectionID, backoff: backoff, on: eventLoop))
+                let jitterRange = backoff.nanoseconds / 100 * 5
+                let jitteredBackoff = backoff + .nanoseconds((-jitterRange...jitterRange).randomElement()!)
+                return .init(.none, .scheduleBackoffTimer(connectionID, backoff: jitteredBackoff, on: eventLoop))
 
             case .shuttingDown:
                 return self.removeFailedOrClosedConnectionForShutdown(connectionIndex: index)
@@ -260,15 +283,38 @@ extension HTTPConnectionPool {
             }
         }
 
-        mutating func connectionCreationBackoffDone(_: Connection.ID) -> Action {
-            preconditionFailure()
+        mutating func connectionCreationBackoffDone(_ connectionID: Connection.ID) -> Action {
+            guard let index = self.connections.firstIndex(where: { $0.connectionID == connectionID }) else {
+                // this might have been triggered, after we discarded the connection. Therefore we can
+                // ignore this message
+                return .none
+            }
+
+            let waiting = self.queue.count
+            let stats = self.stats
+
+            assert(stats.backingOff >= 1, "This connection is currently in backoff")
+
+            // if there are more requests waiting, than we have starting connections, we should
+            // start this connection once more. We expect that it will be used.
+            if waiting > stats.connecting {
+                let newConnectionID = self.idGenerator.next()
+                let eventLoop = self.connections[index].eventLoop
+                self.connections[index].retryConnecting(newConnectionID: newConnectionID)
+                return .init(.none, .createConnection(newConnectionID, on: eventLoop))
+            }
+
+            // if we have more starting connections, than requests queued, we don't need to retry
+            // this connection. Instead we should remove it.
+            self.connections.remove(at: index)
+            return .none
         }
 
         mutating func connectionIdleTimeout(_ connectionID: Connection.ID) -> Action {
             guard let index = self.connections.firstIndex(where: { $0.connectionID == connectionID }) else {
                 // because of a race this connection (connection close runs against trigger of timeout)
                 // was already removed from the state machine.
-                return .init(.none, .none)
+                return .none
             }
 
             assert(self.state == .running, "If we are shutting down, we must not have any idle connections")
@@ -276,7 +322,7 @@ extension HTTPConnectionPool {
             var connectionState = self.connections[index]
             guard connectionState.isAvailable else {
                 // connection is not available anymore, we may have just leased it for a request
-                return .init(.none, .none)
+                return .none
             }
 
             assert(self.queue.isEmpty, "We have an idle connection, that times out, but waiters? Something is very wrong!")
@@ -297,9 +343,9 @@ extension HTTPConnectionPool {
         /// A connection has been closed
         mutating func connectionClosed(_ connectionID: Connection.ID) -> Action {
             guard let index = self.connections.firstIndex(where: { $0.connectionID == connectionID }) else {
-                // because of a race this connection (connection close runs against replace)
-                // was already removed from the state machine.
-                return .init(.none, .none)
+                // because of a race this connection (connection close runs against connection idle
+                // timeout timer) was already removed from the state machine.
+                return .none
             }
 
             switch self.state {
@@ -307,13 +353,10 @@ extension HTTPConnectionPool {
                 let waiterCount = self.queue.count
                 guard waiterCount > 0 else {
                     self.connections.remove(at: index)
-                    return .init(.none, .none)
+                    return .none
                 }
 
                 let closedConnection = self.connections[index]
-                assert(self.connections.count == self.maximumConcurrentConnections,
-                       "Why do we have waiters, if we could open more connections?")
-
                 let newConnection = HTTP1ConnectionState(
                     connectionID: self.idGenerator.next(),
                     eventLoop: closedConnection.eventLoop
@@ -343,7 +386,7 @@ extension HTTPConnectionPool {
 
             // 2. we reach this point, because the waiter may already have been scheduled. A
             //    connection might have become available very shortly before the waiter timed out.
-            return .init(.none, .none)
+            return .none
         }
 
         mutating func cancelWaiter(_ requestID: RequestID) -> Action {
@@ -351,16 +394,16 @@ extension HTTPConnectionPool {
             let waiterIndex = self.queue.firstIndex(where: { $0.requestID == requestID })
             if let waiterIndex = waiterIndex {
                 // TBD: This is potentially slow. Do we maybe want something more sophisticated here?
-                let waiter = self.queue.remove(at: waiterIndex)
+                self.queue.remove(at: waiterIndex)
                 return .init(
-                    .failRequest(waiter.request, HTTPClientError.cancelled, cancelWaiter: requestID),
+                    .cancelWaiterTimeout(requestID),
                     .none
                 )
             }
 
             // 2. we reach this point, because the waiter may already have been forwarded to an
             //    idle connection. The connection will need to handle the cancellation in that case.
-            return .init(.none, .none)
+            return .none
         }
 
         mutating func shutdown() -> Action {
@@ -511,30 +554,40 @@ extension HTTPConnectionPool {
                     .cleanupConnections(.init(), isShutdown: .yes(unclean: unclean))
                 )
             } else {
-                return .init(.none, .none)
+                return .none
             }
+        }
+
+        struct Stats {
+            var idle: Int = 0
+            var leased: Int = 0
+            var connecting: Int = 0
+            var backingOff: Int = 0
+        }
+
+        private var stats: Stats {
+            var stats = Stats()
+            for connectionState in self.connections {
+                if connectionState.isConnecting {
+                    stats.connecting += 1
+                } else if connectionState.isBackingOff {
+                    stats.backingOff += 1
+                } else if connectionState.isLeased {
+                    stats.leased += 1
+                } else if connectionState.isAvailable {
+                    stats.idle += 1
+                }
+            }
+            return stats
         }
     }
 }
 
 extension HTTPConnectionPool.HTTP1StateMachine: CustomStringConvertible {
     var description: String {
-        var starting = 0
-        var leased = 0
-        var parked = 0
-
-        for connectionState in self.connections {
-            if connectionState.isStarting {
-                starting += 1
-            } else if connectionState.isLeased {
-                leased += 1
-            } else if connectionState.isAvailable {
-                parked += 1
-            }
-        }
-
+        let stats = self.stats
         let waiters = self.queue.count
 
-        return "connections: [starting: \(starting) | leased: \(leased) | parked: \(parked)], waiters: \(waiters)"
+        return "connections: [connecting: \(stats.connecting) | backoff: \(stats.backingOff) | leased: \(stats.leased) | idle: \(stats.idle)], waiters: \(waiters)"
     }
 }

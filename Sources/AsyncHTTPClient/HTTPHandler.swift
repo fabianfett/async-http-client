@@ -659,7 +659,7 @@ extension HTTPClient {
 
         let promise: EventLoopPromise<Response>
         let logger: Logger // We are okay to store the logger here because a Task is for only one request.
-        
+
         var connection: HTTPConnectionPool.Connection? {
             self.lock.withLock { self._connection }
         }
@@ -676,7 +676,7 @@ extension HTTPClient {
                 self.lock.withLock { self._taskDelegate = newValue }
             }
         }
-        
+
         private var _connection: HTTPConnectionPool.Connection?
         private var _isCancelled: Bool = false
         private var _taskDelegate: HTTPClientTaskDelegate?
@@ -713,7 +713,7 @@ extension HTTPClient {
                 self._isCancelled = true
                 return self._taskDelegate
             }
-            
+
             taskDelegate?.cancel()
         }
 

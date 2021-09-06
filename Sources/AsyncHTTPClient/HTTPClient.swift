@@ -536,7 +536,7 @@ public class HTTPClient {
                 idleReadTimeout: self.configuration.timeout.read,
                 delegate: delegate
             )
-            
+
             var deadlineSchedule: Scheduled<Void>?
             if let deadline = deadline {
                 deadlineSchedule = taskEL.scheduleTask(deadline: deadline) {
@@ -547,12 +547,12 @@ public class HTTPClient {
                     deadlineSchedule?.cancel()
                 }
             }
-            
+
             self.poolManager.executeRequest(requestBag, clientRequest: request)
         } catch {
             task.fail(with: error, delegateType: Delegate.self)
         }
-        
+
         return task
     }
 
@@ -953,6 +953,7 @@ public struct HTTPClientError: Error, Equatable, CustomStringConvertible {
     public static func serverOfferedUnsupportedApplicationProtocol(_ proto: String) -> HTTPClientError {
         return HTTPClientError(code: .serverOfferedUnsupportedApplicationProtocol(proto))
     }
+
     /// The request deadline was exceeded. The request was cancelled because of this.
     public static let deadlineExceeded = HTTPClientError(code: .deadlineExceeded)
 

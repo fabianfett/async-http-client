@@ -72,26 +72,28 @@ extension HTTPConnectionPool {
             let key = Key(clientRequest)
 
             let poolResult = self.lock.withLock { () -> Result<HTTPConnectionPool, HTTPClientError> in
-                guard case .active = self.state else {
+                switch self.state {
+                case .active:
+                    if let pool = self._pools[key] {
+                        return .success(pool)
+                    }
+
+                    let pool = HTTPConnectionPool(
+                        eventLoopGroup: self.eventLoopGroup,
+                        sslContextCache: self.sslContextCache,
+                        tlsConfiguration: clientRequest.tlsConfiguration,
+                        clientConfiguration: self.configuration,
+                        key: key,
+                        delegate: self,
+                        idGenerator: self.connectionIDGenerator,
+                        backgroundActivityLogger: self.logger
+                    )
+                    self._pools[key] = pool
+                    return .success(pool)
+
+                case .shuttingDown, .shutDown:
                     return .failure(HTTPClientError.alreadyShutdown)
                 }
-
-                if let pool = self._pools[key] {
-                    return .success(pool)
-                }
-
-                let pool = HTTPConnectionPool(
-                    eventLoopGroup: self.eventLoopGroup,
-                    sslContextCache: self.sslContextCache,
-                    tlsConfiguration: clientRequest.tlsConfiguration,
-                    clientConfiguration: self.configuration,
-                    key: key,
-                    delegate: self,
-                    idGenerator: self.connectionIDGenerator,
-                    backgroundActivityLogger: self.logger
-                )
-                self._pools[key] = pool
-                return .success(pool)
             }
 
             switch poolResult {

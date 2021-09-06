@@ -2274,7 +2274,7 @@ class HTTPClientTests: XCTestCase {
                                                         logger: logger).wait())
         XCTAssertEqual(0, logStore.allEntries.count)
 
-        XCTAssertEqual(0, self.backgroundLogStore.allEntries.filter{ $0.level >= .info }.count)
+        XCTAssertEqual(0, self.backgroundLogStore.allEntries.filter { $0.level >= .info }.count)
 
         // === Synthesized Socket Path Request
         XCTAssertNoThrow(try TemporaryFileHelpers.withTemporaryUnixDomainSocketPathName { path in
@@ -2300,7 +2300,7 @@ class HTTPClientTests: XCTestCase {
                                                      logger: logger).wait())
             XCTAssertEqual(0, logStore.allEntries.count)
 
-            XCTAssertEqual(0, backgroundLogStore.allEntries.filter{ $0.level >= .info }.count)
+            XCTAssertEqual(0, backgroundLogStore.allEntries.filter { $0.level >= .info }.count)
         })
 
         // === Synthesized Secure Socket Path Request
@@ -2328,7 +2328,7 @@ class HTTPClientTests: XCTestCase {
                                                      logger: logger).wait())
             XCTAssertEqual(0, logStore.allEntries.count)
 
-            XCTAssertEqual(0, backgroundLogStore.allEntries.filter{ $0.level >= .info }.count)
+            XCTAssertEqual(0, backgroundLogStore.allEntries.filter { $0.level >= .info }.count)
         })
     }
 

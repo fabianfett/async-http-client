@@ -1208,7 +1208,7 @@ class HTTPEchoHandler: ChannelInboundHandler {
             context.writeAndFlush(self.wrapOutboundOut(.body(.byteBuffer(bytes))), promise: nil)
         case .end:
             context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
-            context.close(promise: nil)
+//            context.close(promise: nil)
         }
     }
 }

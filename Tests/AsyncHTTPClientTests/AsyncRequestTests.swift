@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import _NIOConcurrency
 @testable import AsyncHTTPClient
 import Logging
 import NIO

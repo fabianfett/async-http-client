@@ -14,6 +14,7 @@
 
 import Logging
 import NIO
+import NIOSSL
 import NIOHTTP1
 
 @available(macOS 12.0, iOS 15.0, watchOS 8.0, tvOS 15.0, *)
@@ -24,24 +25,26 @@ actor AsyncRequestBag {
     let logger: Logger
 
     let requestHead: HTTPRequestHead
+    let requestOptions: RequestOptions
     let requestFramingMetadata: RequestFramingMetadata
 
-    let idleReadTimeout: TimeAmount?
     let connectionDeadline: NIODeadline
-    let eventLoopPreference: HTTPClient.EventLoopPreference
+    let preferredEventLoop: EventLoop
+    let poolKey: ConnectionPool.Key
 
     private var state: StateMachine = .init()
     private var isCancelled = false
 
     init(request: AsyncRequest,
+         requestOptions: RequestOptions,
          logger: Logger,
          connectionDeadline: NIODeadline,
-         eventLoopPreference: HTTPClient.EventLoopPreference) {
+         preferredEventLoop: EventLoop) {
         self.request = request
+        self.requestOptions = requestOptions
         self.logger = logger
-        self.idleReadTimeout = nil
         self.connectionDeadline = connectionDeadline
-        self.eventLoopPreference = eventLoopPreference
+        self.preferredEventLoop = preferredEventLoop
 
         self.requestHead = HTTPRequestHead(
             version: .http1_1,
@@ -248,6 +251,14 @@ actor AsyncRequestBag {
 
 @available(macOS 12.0, iOS 15.0, watchOS 8.0, tvOS 15.0, *)
 extension AsyncRequestBag: HTTPSchedulableRequest {
+    nonisolated var tlsConfiguration: TLSConfiguration? {
+        return nil
+    }
+    
+    nonisolated var requiredEventLoop: EventLoop? {
+        return nil
+    }
+    
     nonisolated func requestWasQueued(_ scheduler: HTTPRequestScheduler) {
         Task.detached {
             await self.requestWasQueued0(scheduler)

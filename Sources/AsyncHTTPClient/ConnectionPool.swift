@@ -20,26 +20,27 @@ enum ConnectionPool {
     /// connection providers associated to a certain request in constant time.
     struct Key: Hashable, CustomStringConvertible {
         init(_ request: HTTPClient.Request) {
-            switch request.scheme {
-            case "http":
-                self.scheme = .http
-            case "https":
-                self.scheme = .https
-            case "unix":
-                self.scheme = .unix
-            case "http+unix":
-                self.scheme = .http_unix
-            case "https+unix":
-                self.scheme = .https_unix
-            default:
-                fatalError("HTTPClient.Request scheme should already be a valid one")
-            }
+            self.scheme = Scheme(string: request.scheme)
             self.port = request.port
             self.host = request.host
             self.unixPath = request.socketPath
             if let tls = request.tlsConfiguration {
                 self.tlsConfiguration = BestEffortHashableTLSConfiguration(wrapping: tls)
             }
+        }
+        
+        init(
+            scheme: Scheme,
+            host: String,
+            port: Int,
+            unixPath: String,
+            tlsConfiguration: BestEffortHashableTLSConfiguration?
+        ) {
+            self.scheme = scheme
+            self.host = host
+            self.port = port
+            self.unixPath = unixPath
+            self.tlsConfiguration = tlsConfiguration
         }
 
         var scheme: Scheme
@@ -54,6 +55,23 @@ enum ConnectionPool {
             case unix
             case http_unix
             case https_unix
+            
+            init(string: String) {
+                switch string {
+                case "http":
+                    self = .http
+                case "https":
+                    self = .https
+                case "unix":
+                    self = .unix
+                case "http+unix":
+                    self = .http_unix
+                case "https+unix":
+                    self = .https_unix
+                default:
+                    fatalError("HTTPClient.Request scheme should already be a valid one")
+                }
+            }
 
             var requiresTLS: Bool {
                 switch self {

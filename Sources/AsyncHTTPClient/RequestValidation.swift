@@ -102,7 +102,7 @@ extension HTTPHeaders {
         return metadata
     }
 
-    private func validateFieldNames() throws {
+    func validateFieldNames() throws {
         let invalidFieldNames = self.compactMap { (name, _) -> String? in
             let satisfy = name.utf8.allSatisfy { (char) -> Bool in
                 switch char {

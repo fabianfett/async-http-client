@@ -183,9 +183,10 @@ extension HTTPClient {
     func execute(_ request: AsyncRequest, deadline: NIODeadline, logger: Logger) async throws -> AsyncResponse {
         let bag = AsyncRequestBag(
             request: request,
+            requestOptions: .init(idleReadTimeout: nil, ignoreUncleanSSLShutdown: false),
             logger: logger,
             connectionDeadline: .now() + .seconds(10),
-            eventLoopPreference: .indifferent
+            preferredEventLoop: self.eventLoopGroup.next()
         )
 
         return try await withTaskCancellationHandler {
@@ -195,7 +196,7 @@ extension HTTPClient {
             async let result = bag.result()
 
             // second throw it onto the connection pool for execution
-//            self.pool.execute(bag)
+            self.poolManager.executeRequest(bag)
 
             // third await result
             return try await result

@@ -63,6 +63,8 @@ actor AsyncRequestBag {
         case .none:
             self.requestFramingMetadata = .init(connectionClose: false, body: .none)
         }
+        
+        self.poolKey = ConnectionPool.Key(scheme: .http, host: "localhost", port: 123, unixPath: "", tlsConfiguration: nil)
     }
 
     nonisolated func cancel() {

@@ -101,21 +101,23 @@ extension AsyncRequest {
             throw HTTPClientError.chunkedSpecifiedMultipleTimes
         }
 
-        if encodings.isEmpty {
-            switch self.body {
-            case .some(.byteBuffer(let byteBuffer)):
-                head.headers.add(name: "content-length", value: "\(byteBuffer.readableBytes)")
-            case .some(bytes(let sequence)):
-                // if we have a content length header, we assume this was set correctly
-                if head.headers.contains(name: "content-length") {
-                    
-                } else {
-                    head.headers.add(name: "transfer-encoding", value: "chunked")
-                }
-                
-            }
-            
-            
-        }
+//        if encodings.isEmpty {
+//            switch self.body {
+//            case .some(.byteBuffer(let byteBuffer)):
+//                head.headers.add(name: "content-length", value: "\(byteBuffer.readableBytes)")
+//            case .some(bytes(let sequence)):
+//                // if we have a content length header, we assume this was set correctly
+//                if head.headers.contains(name: "content-length") {
+//                    
+//                } else {
+//                    head.headers.add(name: "transfer-encoding", value: "chunked")
+//                }
+//                
+//            }
+//            
+//            
+//        }
+        
+        preconditionFailure()
     }
 }

@@ -22,15 +22,18 @@ import XCTest
 final class AsyncRequestTests: XCTestCase {
     func testCancelAsyncRequest() async {
         let logger = Logger(label: "test")
+        let embeddedEventLoop = EmbeddedEventLoop()
+        defer { XCTAssertNoThrow(try embeddedEventLoop.syncShutdownGracefully()) }
 
         var request = AsyncRequest(url: "https://localhost/")
         request.method = .GET
 
         let requestBag = AsyncRequestBag(
             request: request,
+            requestOptions: .forTests(),
             logger: logger,
             connectionDeadline: .distantFuture,
-            eventLoopPreference: .indifferent
+            preferredEventLoop: embeddedEventLoop
         )
 
         async let result = requestBag.result()
@@ -58,9 +61,10 @@ final class AsyncRequestTests: XCTestCase {
 
         let requestBag = AsyncRequestBag(
             request: request,
+            requestOptions: .forTests(),
             logger: logger,
             connectionDeadline: .distantFuture,
-            eventLoopPreference: .indifferent
+            preferredEventLoop: embeddedEventLoop
         )
 
         async let awaitableResponse = requestBag.result()
@@ -128,9 +132,10 @@ final class AsyncRequestTests: XCTestCase {
 
         let requestBag = AsyncRequestBag(
             request: request,
+            requestOptions: .forTests(),
             logger: logger,
             connectionDeadline: .distantFuture,
-            eventLoopPreference: .indifferent
+            preferredEventLoop: embeddedEventLoop
         )
 
         async let awaitableResponse = requestBag.result()
@@ -228,9 +233,10 @@ final class AsyncRequestTests: XCTestCase {
 
             let requestBag = AsyncRequestBag(
                 request: request,
+                requestOptions: .forTests(),
                 logger: Logger(label: "test"),
                 connectionDeadline: .distantFuture,
-                eventLoopPreference: .indifferent
+                preferredEventLoop: eventLoopGroup.next()
             )
 
             async let awaitableResponse = requestBag.result()
@@ -288,13 +294,14 @@ final class AsyncRequestTests: XCTestCase {
 
             let requestBag = AsyncRequestBag(
                 request: request,
+                requestOptions: .forTests(),
                 logger: Logger(label: "test"),
                 connectionDeadline: .distantFuture,
-                eventLoopPreference: .indifferent
+                preferredEventLoop: eventLoopGroup.next()
             )
 
             async let awaitableResponse = requestBag.result()
-            await Task.yield()
+            await Task.yield() // yield is used here to ensure register continuation is executed here.
 
             http2Connection.executeRequest(requestBag)
 

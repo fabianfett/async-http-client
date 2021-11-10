@@ -15,6 +15,7 @@
 @testable import AsyncHTTPClient
 import Logging
 import NIOCore
+import NIOConcurrencyHelpers
 import NIOEmbedded
 import NIOHTTP1
 import XCTest
@@ -435,7 +436,7 @@ final class RequestBagTests: XCTestCase {
         ))
         guard let bag = maybeRequestBag else { return XCTFail("Expected to be able to create a request bag.") }
 
-        let executor = MockRequestExecutor()
+        let executor = MockRequestExecutor(eventLoop: embeddedEventLoop)
         bag.willExecuteRequest(executor)
         bag.requestHeadSent()
         bag.receiveResponseHead(.init(version: .http1_1, status: .ok))

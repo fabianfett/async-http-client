@@ -183,7 +183,7 @@ extension HTTPClient {
     func execute(_ request: AsyncRequest, deadline: NIODeadline, logger: Logger) async throws -> AsyncResponse {
         let bag = AsyncRequestBag(
             request: request,
-            requestOptions: .init(idleReadTimeout: nil, ignoreUncleanSSLShutdown: false),
+            requestOptions: .init(idleReadTimeout: nil),
             logger: logger,
             connectionDeadline: .now() + .seconds(10),
             preferredEventLoop: self.eventLoopGroup.next()

@@ -20,7 +20,10 @@ import XCTest
 class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
     func testCreatingConnections() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
 
         let el1 = elg.next()
         let el2 = elg.next()
@@ -59,7 +62,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
     func testCreatingConnectionAndFailing() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
 
         let el1 = elg.next()
         let el2 = elg.next()
@@ -108,7 +114,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
         let el1 = elg.next()
 
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
 
         // connection is idle
         let conn1ID = connections.createNewConnection(on: el1)
@@ -130,7 +139,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
         let el4 = elg.next()
         let el5 = elg.next()
 
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         XCTAssertFalse(connections.hasConnectionThatCanOrWillBeAbleToExecuteRequests)
         for el in [el1, el2, el3, el4] {
             XCTAssertFalse(connections.hasConnectionThatCanOrWillBeAbleToExecuteRequests(for: el))
@@ -155,7 +167,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
         let el4 = elg.next()
         let el5 = elg.next()
 
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         XCTAssertFalse(connections.hasConnectionThatCanOrWillBeAbleToExecuteRequests)
         for el in [el1, el2, el3, el4] {
             XCTAssertFalse(connections.hasConnectionThatCanOrWillBeAbleToExecuteRequests(for: el))
@@ -177,7 +192,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
         let el1 = elg.next()
 
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
 
         // connection is idle
         let conn1ID = connections.createNewConnection(on: el1)
@@ -201,7 +219,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
         let el1 = elg.next()
 
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
 
         // connection is idle
         let conn1ID = connections.createNewConnection(on: el1)
@@ -224,7 +245,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
         let el1 = elg.next()
 
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
 
         // connection is idle
         let conn1ID = connections.createNewConnection(on: el1)
@@ -241,7 +265,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
         let el1 = elg.next()
 
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
 
         // connection is idle
         let conn1ID = connections.createNewConnection(on: el1)
@@ -268,7 +295,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
         let el5 = elg.next()
         let el6 = elg.next()
 
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         XCTAssertFalse(connections.hasConnectionThatCanOrWillBeAbleToExecuteRequests)
         for el in [el1, el2, el3, el4] {
             XCTAssertFalse(connections.hasConnectionThatCanOrWillBeAbleToExecuteRequests(for: el))
@@ -331,7 +361,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
     func testLeasingAllConnections() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
 
         let conn1ID = connections.createNewConnection(on: el1)
@@ -359,7 +392,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
     func testGoAway() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
 
         let conn1ID = connections.createNewConnection(on: el1)
@@ -440,7 +476,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
     func testNewMaxConcurrentStreamsSetting() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
 
         let conn1ID = connections.createNewConnection(on: el1)
@@ -495,7 +534,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
     func testEventsAfterConnectionIsClosed() {
         let elg = EmbeddedEventLoopGroup(loops: 2)
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
 
         let conn1ID = connections.createNewConnection(on: el1)
@@ -530,7 +572,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
     func testLeaseOnPreferredEventLoopWithoutAnyAvailable() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
 
         let conn1ID = connections.createNewConnection(on: el1)
@@ -546,7 +591,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
 
     func testMigrationFromHTTP1() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: .init())
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
         let el2 = elg.next()
         let conn1ID: HTTPConnectionPool.Connection.ID = 1
@@ -598,7 +646,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
     func testMigrationToHTTP1() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
         let generator = HTTPConnectionPool.Connection.ID.Generator()
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: generator)
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
         let el2 = elg.next()
         let el3 = elg.next()
@@ -663,7 +714,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
     func testMigrationFromHTTP1WithPendingRequestsWithRequiredEventLoop() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
         let generator = HTTPConnectionPool.Connection.ID.Generator()
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: generator)
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: .init(),
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
         let el2 = elg.next()
         let el3 = elg.next()
@@ -696,7 +750,10 @@ class HTTPConnectionPool_HTTP2ConnectionsTests: XCTestCase {
     func testMigrationFromHTTP1WithAlreadyEstablishedHTTP2Connection() {
         let elg = EmbeddedEventLoopGroup(loops: 4)
         let generator = HTTPConnectionPool.Connection.ID.Generator()
-        var connections = HTTPConnectionPool.HTTP2Connections(generator: generator)
+        var connections = HTTPConnectionPool.HTTP2Connections(
+            generator: generator,
+            maximumTotalStreamsPerConnection: .maxEndpointInitiatedStreams
+        )
         let el1 = elg.next()
         let el2 = elg.next()
         let el3 = elg.next()

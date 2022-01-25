@@ -97,9 +97,13 @@ extension HTTPConnectionPool {
 
         let idGenerator: Connection.ID.Generator
         let maximumConcurrentHTTP1Connections: Int
+        let maximumTotalStreamsHTTP2Connections: Int32
 
-        init(idGenerator: Connection.ID.Generator, maximumConcurrentHTTP1Connections: Int) {
+        init(idGenerator: Connection.ID.Generator,
+             maximumConcurrentHTTP1Connections: Int,
+             maximumTotalStreamsHTTP2Connections: Int32) {
             self.maximumConcurrentHTTP1Connections = maximumConcurrentHTTP1Connections
+            self.maximumTotalStreamsHTTP2Connections = maximumTotalStreamsHTTP2Connections
             self.idGenerator = idGenerator
             let http1State = HTTP1StateMachine(
                 idGenerator: idGenerator,
@@ -148,6 +152,7 @@ extension HTTPConnectionPool {
 
                 var http2StateMachine = HTTP2StateMachine(
                     idGenerator: self.idGenerator,
+                    maximumTotalStreamsPerConnection: self.maximumTotalStreamsHTTP2Connections,
                     lifecycleState: http1StateMachine.lifecycleState
                 )
                 let migrationAction = http2StateMachine.migrateFromHTTP1(

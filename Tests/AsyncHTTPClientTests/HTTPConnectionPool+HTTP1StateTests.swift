@@ -26,7 +26,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 8
+            maximumConcurrentHTTP1Connections: 8,
+            maximumTotalStreamsHTTP2Connections: .maxEndpointInitiatedStreams
         )
 
         var connections = MockConnectionPool()
@@ -109,7 +110,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 2
+            maximumConcurrentHTTP1Connections: 2,
+            maximumTotalStreamsHTTP2Connections: .maxEndpointInitiatedStreams
         )
 
         let mockRequest = MockHTTPRequest(eventLoop: elg.next())
@@ -166,7 +168,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 2
+            maximumConcurrentHTTP1Connections: 2,
+            maximumTotalStreamsHTTP2Connections: .maxEndpointInitiatedStreams
         )
 
         let mockRequest = MockHTTPRequest(eventLoop: elg.next())
@@ -202,7 +205,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 2
+            maximumConcurrentHTTP1Connections: 2,
+            maximumTotalStreamsHTTP2Connections: .maxEndpointInitiatedStreams
         )
 
         let mockRequest = MockHTTPRequest(eventLoop: elg.next())
@@ -592,7 +596,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 6
+            maximumConcurrentHTTP1Connections: 6,
+            maximumTotalStreamsHTTP2Connections: .maxEndpointInitiatedStreams
         )
 
         let mockRequest = MockHTTPRequest(eventLoop: elg.next(), requiresEventLoopForChannel: false)
@@ -630,7 +635,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 6
+            maximumConcurrentHTTP1Connections: 6,
+            maximumTotalStreamsHTTP2Connections: .maxEndpointInitiatedStreams
         )
 
         let mockRequest = MockHTTPRequest(eventLoop: elg.next(), requiresEventLoopForChannel: false)
@@ -661,7 +667,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 6
+            maximumConcurrentHTTP1Connections: 6,
+            maximumTotalStreamsHTTP2Connections: .maxEndpointInitiatedStreams
         )
 
         let mockRequest = MockHTTPRequest(eventLoop: eventLoop.next(), requiresEventLoopForChannel: false)
@@ -684,7 +691,8 @@ class HTTPConnectionPool_HTTP1StateMachineTests: XCTestCase {
 
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 6
+            maximumConcurrentHTTP1Connections: 6,
+            maximumTotalStreamsHTTP2Connections: .maxEndpointInitiatedStreams
         )
 
         let mockRequest1 = MockHTTPRequest(eventLoop: elg.next(), requiresEventLoopForChannel: false)

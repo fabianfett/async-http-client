@@ -537,11 +537,13 @@ extension MockConnectionPool {
         elg: EventLoopGroup,
         on eventLoop: EventLoop? = nil,
         numberOfConnections: Int,
-        maxNumberOfConnections: Int = 8
+        maxNumberOfConnections: Int = 8,
+        maximumTotalStreamsHTTP2Connections: Int32 = .maxEndpointInitiatedStreams
     ) throws -> (Self, HTTPConnectionPool.StateMachine) {
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: maxNumberOfConnections
+            maximumConcurrentHTTP1Connections: maxNumberOfConnections,
+            maximumTotalStreamsHTTP2Connections: maximumTotalStreamsHTTP2Connections
         )
         var connections = MockConnectionPool()
         var queuer = MockRequestQueuer()
@@ -600,11 +602,13 @@ extension MockConnectionPool {
     static func http2(
         elg: EventLoopGroup,
         on eventLoop: EventLoop? = nil,
-        maxConcurrentStreams: Int = 100
+        maxConcurrentStreams: Int = 100,
+        maximumTotalStreamsHTTP2Connections: Int32 = .maxEndpointInitiatedStreams
     ) throws -> (Self, HTTPConnectionPool.StateMachine) {
         var state = HTTPConnectionPool.StateMachine(
             idGenerator: .init(),
-            maximumConcurrentHTTP1Connections: 8
+            maximumConcurrentHTTP1Connections: 8,
+            maximumTotalStreamsHTTP2Connections: maximumTotalStreamsHTTP2Connections
         )
         var connections = MockConnectionPool()
         var queuer = MockRequestQueuer()

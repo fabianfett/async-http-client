@@ -36,12 +36,16 @@ extension HTTPConnectionPool {
 
         init(
             idGenerator: Connection.ID.Generator,
+            maximumTotalStreamsPerConnection: Int32,
             lifecycleState: StateMachine.LifecycleState
         ) {
             self.idGenerator = idGenerator
             self.requests = RequestQueue()
 
-            self.connections = HTTP2Connections(generator: idGenerator)
+            self.connections = HTTP2Connections(
+                generator: idGenerator,
+                maximumTotalStreamsPerConnection: maximumTotalStreamsPerConnection
+            )
             self.lifecycleState = lifecycleState
         }
 

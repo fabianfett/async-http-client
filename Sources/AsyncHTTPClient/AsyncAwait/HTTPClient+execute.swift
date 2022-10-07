@@ -141,7 +141,11 @@ extension HTTPClient {
 
                 cancelHandler.registerTransaction(transaction)
 
-                self.poolManager.executeRequest(transaction)
+                self.poolManager.executeRequest(
+                    transaction,
+                    key: .init(request: request, clientConfiguration: self.configuration),
+                    configuration: .init(request: request, clientConfiguration: self.configuration)
+                )
             }
         }, onCancel: {
             cancelHandler.cancel(reason: .taskCanceled)
@@ -153,7 +157,7 @@ extension HTTPClient {
 /// As a workaround we use `TransactionCancelHandler` which will take care of the race between instantiation of `Transaction`
 /// in the `body` closure and cancelation from the `onCancel` closure  of `withTaskCancellationHandler`.
 @available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
-private actor TransactionCancelHandler {
+actor TransactionCancelHandler {
     enum CancelReason {
         /// swift concurrency task was canceled
         case taskCanceled

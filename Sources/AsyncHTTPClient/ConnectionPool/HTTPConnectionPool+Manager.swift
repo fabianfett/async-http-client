@@ -20,7 +20,7 @@ import NIOHTTP1
 
 extension HTTPConnectionPool {
     final class Manager {
-        private typealias Key = ConnectionPool.Key
+//        private typealias Key = ConnectionPool.Key
 
         private enum State {
             case active
@@ -47,8 +47,8 @@ extension HTTPConnectionPool {
             self.logger = logger
         }
 
-        func executeRequest(_ request: HTTPSchedulableRequest) {
-            let poolKey = request.poolKey
+        func executeRequest(_ request: HTTPSchedulableRequest, key: Key, configuration: Configuration) {
+            let poolKey = key
             let poolResult = self.lock.withLock { () -> Result<HTTPConnectionPool, HTTPClientError> in
                 switch self.state {
                 case .active:
@@ -59,8 +59,7 @@ extension HTTPConnectionPool {
                     let pool = HTTPConnectionPool(
                         eventLoopGroup: self.eventLoopGroup,
                         sslContextCache: self.sslContextCache,
-                        tlsConfiguration: request.tlsConfiguration,
-                        clientConfiguration: self.configuration,
+                        configuration: configuration,
                         key: poolKey,
                         delegate: self,
                         idGenerator: self.connectionIDGenerator,

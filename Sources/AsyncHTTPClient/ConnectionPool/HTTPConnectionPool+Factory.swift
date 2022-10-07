@@ -26,19 +26,16 @@ import NIOTransportServices
 
 extension HTTPConnectionPool {
     struct ConnectionFactory {
-        let key: ConnectionPool.Key
-        let clientConfiguration: HTTPClient.Configuration
-        let tlsConfiguration: TLSConfiguration
+        let key: Key
+        let configuration: Configuration
         let sslContextCache: SSLContextCache
 
-        init(key: ConnectionPool.Key,
-             tlsConfiguration: TLSConfiguration?,
-             clientConfiguration: HTTPClient.Configuration,
+        init(key: Key,
+             configuration: Configuration,
              sslContextCache: SSLContextCache) {
             self.key = key
-            self.clientConfiguration = clientConfiguration
             self.sslContextCache = sslContextCache
-            self.tlsConfiguration = tlsConfiguration ?? clientConfiguration.tlsConfiguration ?? .makeClientConfiguration()
+            self.configuration = configuration
         }
     }
 }
@@ -71,7 +68,7 @@ extension HTTPConnectionPool.ConnectionFactory {
                         channel: channel,
                         connectionID: connectionID,
                         delegate: http1ConnectionDelegate,
-                        decompression: self.clientConfiguration.decompression,
+                        decompression: self.configuration.decompression,
                         logger: logger
                     )
                     requester.http1ConnectionCreated(connection)
@@ -83,7 +80,7 @@ extension HTTPConnectionPool.ConnectionFactory {
                     channel: channel,
                     connectionID: connectionID,
                     delegate: http2ConnectionDelegate,
-                    decompression: self.clientConfiguration.decompression,
+                    decompression: self.configuration.decompression,
                     logger: logger
                 ).whenComplete { result in
                     switch result {
@@ -114,7 +111,7 @@ extension HTTPConnectionPool.ConnectionFactory {
     ) -> EventLoopFuture<NegotiatedProtocol> {
         let channelFuture: EventLoopFuture<NegotiatedProtocol>
 
-        if self.key.scheme.isProxyable, let proxy = self.clientConfiguration.proxy {
+        if self.key.scheme.isProxyable, let proxy = self.configuration.proxy {
             switch proxy.type {
             case .socks:
                 channelFuture = self.makeSOCKSProxyChannel(
@@ -268,8 +265,8 @@ extension HTTPConnectionPool.ConnectionFactory {
         case .http:
             return channel.eventLoop.makeSucceededFuture(.http1_1(channel))
         case .https:
-            var tlsConfig = self.tlsConfiguration
-            switch self.clientConfiguration.httpVersion.configuration {
+            var tlsConfig = self.configuration.tlsConfiguration
+            switch self.configuration.httpVersion.configuration {
             case .automatic:
                 // since we can support h2, we need to advertise this in alpn
                 // "ProtocolNameList" contains the list of protocols advertised by the
@@ -320,7 +317,7 @@ extension HTTPConnectionPool.ConnectionFactory {
         #if canImport(Network)
         if #available(OSX 10.14, iOS 12.0, tvOS 12.0, watchOS 6.0, *), let tsBootstrap = NIOTSConnectionBootstrap(validatingGroup: eventLoop) {
             return tsBootstrap
-                .channelOption(NIOTSChannelOptions.waitForActivity, value: self.clientConfiguration.networkFrameworkWaitForConnectivity)
+                .channelOption(NIOTSChannelOptions.waitForActivity, value: self.configuration.networkFrameworkWaitForConnectivity)
                 .connectTimeout(deadline - NIODeadline.now())
                 .channelInitializer { channel in
                     do {
@@ -389,8 +386,8 @@ extension HTTPConnectionPool.ConnectionFactory {
         eventLoop: EventLoop,
         logger: Logger
     ) -> EventLoopFuture<NIOClientTCPBootstrapProtocol> {
-        var tlsConfig = self.tlsConfiguration
-        switch self.clientConfiguration.httpVersion.configuration {
+        var tlsConfig = self.configuration.tlsConfiguration
+        switch self.configuration.httpVersion.configuration {
         case .automatic:
             // since we can support h2, we need to advertise this in alpn
             // "ProtocolNameList" contains the list of protocols advertised by the
@@ -408,7 +405,7 @@ extension HTTPConnectionPool.ConnectionFactory {
                 options -> NIOClientTCPBootstrapProtocol in
 
                 tsBootstrap
-                    .channelOption(NIOTSChannelOptions.waitForActivity, value: self.clientConfiguration.networkFrameworkWaitForConnectivity)
+                    .channelOption(NIOTSChannelOptions.waitForActivity, value: self.configuration.networkFrameworkWaitForConnectivity)
                     .connectTimeout(deadline - NIODeadline.now())
                     .tlsOptions(options)
                     .channelInitializer { channel in

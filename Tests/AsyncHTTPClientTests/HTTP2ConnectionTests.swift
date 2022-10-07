@@ -246,16 +246,14 @@ class TestConnectionCreator {
         on eventLoop: EventLoop,
         logger: Logger = .init(label: "test")
     ) throws -> HTTP1Connection {
-        let request = try! HTTPClient.Request(url: "https://localhost:\(port)")
-
         var tlsConfiguration = TLSConfiguration.makeClientConfiguration()
         tlsConfiguration.certificateVerification = .none
+        let request = try! HTTPClient.Request(url: "https://localhost:\(port)", tlsConfiguration: tlsConfiguration)
         var config = HTTPClient.Configuration()
         config.httpVersion = .automatic
         let factory = HTTPConnectionPool.ConnectionFactory(
-            key: .init(request),
-            tlsConfiguration: tlsConfiguration,
-            clientConfiguration: config,
+            key: .init(request: request, clientConfiguration: config),
+            configuration: .init(request: request, clientConfiguration: config),
             sslContextCache: .init()
         )
 
@@ -289,16 +287,14 @@ class TestConnectionCreator {
         on eventLoop: EventLoop,
         logger: Logger = .init(label: "test")
     ) throws -> HTTP2Connection {
-        let request = try! HTTPClient.Request(url: "https://localhost:\(port)")
-
         var tlsConfiguration = TLSConfiguration.makeClientConfiguration()
         tlsConfiguration.certificateVerification = .none
+        let request = try! HTTPClient.Request(url: "https://localhost:\(port)", tlsConfiguration: tlsConfiguration)
         var config = HTTPClient.Configuration()
         config.httpVersion = .automatic
         let factory = HTTPConnectionPool.ConnectionFactory(
-            key: .init(request),
-            tlsConfiguration: tlsConfiguration,
-            clientConfiguration: config,
+            key: .init(request: request, clientConfiguration: config),
+            configuration: .init(request: request, clientConfiguration: config),
             sslContextCache: .init()
         )
 

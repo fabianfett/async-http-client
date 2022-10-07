@@ -49,6 +49,9 @@ class HTTPConnectionPool_ManagerTests: XCTestCase {
             var maybeRequest: HTTPClient.Request?
             var maybeRequestBag: RequestBag<ResponseAccumulator>?
             XCTAssertNoThrow(maybeRequest = try HTTPClient.Request(url: "http://localhost:\(httpBin.port)"))
+            guard let request = maybeRequest else {
+                return XCTFail("Expected to have a request here.")
+            }
             XCTAssertNoThrow(maybeRequestBag = try RequestBag(
                 request: XCTUnwrap(maybeRequest),
                 eventLoopPreference: .indifferent,
@@ -61,7 +64,11 @@ class HTTPConnectionPool_ManagerTests: XCTestCase {
 
             guard let requestBag = maybeRequestBag else { return XCTFail("Expected to get a request") }
 
-            poolManager.executeRequest(requestBag)
+            poolManager.executeRequest(
+                requestBag,
+                key: .init(request: request, clientConfiguration: .init()),
+                configuration: .init(request: request, clientConfiguration: .init())
+            )
 
             XCTAssertNoThrow(try requestBag.task.futureResult.wait())
             XCTAssertEqual(httpBin.activeConnections, 1)
@@ -105,6 +112,9 @@ class HTTPConnectionPool_ManagerTests: XCTestCase {
         var maybeRequest: HTTPClient.Request?
         var maybeRequestBag: RequestBag<ResponseAccumulator>?
         XCTAssertNoThrow(maybeRequest = try HTTPClient.Request(url: "http://localhost:\(httpBin.port)"))
+        guard let request = maybeRequest else {
+            return XCTFail("Expected to have a request here.")
+        }
         XCTAssertNoThrow(maybeRequestBag = try RequestBag(
             request: XCTUnwrap(maybeRequest),
             eventLoopPreference: .indifferent,
@@ -117,7 +127,11 @@ class HTTPConnectionPool_ManagerTests: XCTestCase {
 
         guard let requestBag = maybeRequestBag else { return XCTFail("Expected to get a request") }
 
-        poolManager.executeRequest(requestBag)
+        poolManager.executeRequest(
+            requestBag,
+            key: .init(request: request, clientConfiguration: .init()),
+            configuration: .init(request: request, clientConfiguration: .init())
+        )
 
         XCTAssertThrowsError(try requestBag.task.futureResult.wait()) {
             XCTAssertEqual($0 as? HTTPClientError, .alreadyShutdown)

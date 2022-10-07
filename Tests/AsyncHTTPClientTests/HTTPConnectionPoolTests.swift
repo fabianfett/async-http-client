@@ -30,12 +30,14 @@ class HTTPConnectionPoolTests: XCTestCase {
         let request = try! HTTPClient.Request(url: "http://localhost:\(httpBin.port)")
         let poolDelegate = TestDelegate(eventLoop: eventLoop)
 
+        var clientConfiguration = HTTPClient.Configuration()
+        clientConfiguration.httpVersion = .automatic
+
         let pool = HTTPConnectionPool(
             eventLoopGroup: eventLoopGroup,
             sslContextCache: .init(),
-            tlsConfiguration: .none,
-            clientConfiguration: .init(),
-            key: .init(request),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
             delegate: poolDelegate,
             idGenerator: .init(),
             backgroundActivityLogger: .init(label: "test")
@@ -83,12 +85,14 @@ class HTTPConnectionPoolTests: XCTestCase {
         let request = try! HTTPClient.Request(url: "http://localhost:\(httpBin.port)")
         let poolDelegate = TestDelegate(eventLoop: eventLoop)
 
+        var clientConfiguration = HTTPClient.Configuration()
+        clientConfiguration.httpVersion = .automatic
+
         let pool = HTTPConnectionPool(
             eventLoopGroup: eventLoopGroup,
             sslContextCache: .init(),
-            tlsConfiguration: .none,
-            clientConfiguration: .init(),
-            key: .init(request),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
             delegate: poolDelegate,
             idGenerator: .init(),
             backgroundActivityLogger: .init(label: "test")
@@ -136,12 +140,15 @@ class HTTPConnectionPoolTests: XCTestCase {
         let request = try! HTTPClient.Request(url: "http://localhost:\(httpBin.port)")
         let poolDelegate = TestDelegate(eventLoop: eventLoop)
 
+        var clientConfiguration = HTTPClient.Configuration()
+        clientConfiguration.httpVersion = .automatic
+        clientConfiguration.connectionPool.idleTimeout = .milliseconds(500)
+
         let pool = HTTPConnectionPool(
             eventLoopGroup: eventLoopGroup,
             sslContextCache: .init(),
-            tlsConfiguration: .none,
-            clientConfiguration: .init(connectionPool: .init(idleTimeout: .milliseconds(500))),
-            key: .init(request),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
             delegate: poolDelegate,
             idGenerator: .init(),
             backgroundActivityLogger: .init(label: "test")
@@ -194,14 +201,15 @@ class HTTPConnectionPoolTests: XCTestCase {
         let request = try! HTTPClient.Request(url: "http://localhost:9000")
         let poolDelegate = TestDelegate(eventLoop: eventLoop)
 
+        var clientConfiguration = HTTPClient.Configuration()
+        clientConfiguration.httpVersion = .automatic
+        clientConfiguration.proxy = .init(host: "localhost", port: httpBin.port, type: .http(.basic(credentials: "invalid")))
+
         let pool = HTTPConnectionPool(
             eventLoopGroup: eventLoopGroup,
             sslContextCache: .init(),
-            tlsConfiguration: .none,
-            clientConfiguration: .init(
-                proxy: .init(host: "localhost", port: httpBin.port, type: .http(.basic(credentials: "invalid")))
-            ),
-            key: .init(request),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
             delegate: poolDelegate,
             idGenerator: .init(),
             backgroundActivityLogger: .init(label: "test")
@@ -246,14 +254,15 @@ class HTTPConnectionPoolTests: XCTestCase {
         let request = try! HTTPClient.Request(url: "http://localhost:9000")
         let poolDelegate = TestDelegate(eventLoop: eventLoop)
 
+        var clientConfiguration = HTTPClient.Configuration()
+        clientConfiguration.httpVersion = .automatic
+        clientConfiguration.proxy = .init(host: "localhost", port: httpBin.port, type: .http(.basic(credentials: "invalid")))
+
         let pool = HTTPConnectionPool(
             eventLoopGroup: eventLoopGroup,
             sslContextCache: .init(),
-            tlsConfiguration: .none,
-            clientConfiguration: .init(
-                proxy: .init(host: "localhost", port: httpBin.port, type: .http(.basic(credentials: "invalid")))
-            ),
-            key: .init(request),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
             delegate: poolDelegate,
             idGenerator: .init(),
             backgroundActivityLogger: .init(label: "test")
@@ -298,14 +307,15 @@ class HTTPConnectionPoolTests: XCTestCase {
         let request = try! HTTPClient.Request(url: "http://localhost:\(httpBin.port)")
         let poolDelegate = TestDelegate(eventLoop: eventLoop)
 
+        var clientConfiguration = HTTPClient.Configuration()
+        clientConfiguration.httpVersion = .automatic
+        clientConfiguration.proxy = .init(host: "localhost", port: httpBin.port, type: .http(.basic(credentials: "invalid")))
+
         let pool = HTTPConnectionPool(
             eventLoopGroup: eventLoopGroup,
             sslContextCache: .init(),
-            tlsConfiguration: .none,
-            clientConfiguration: .init(
-                proxy: .init(host: "localhost", port: httpBin.port, type: .http(.basic(credentials: "invalid")))
-            ),
-            key: .init(request),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
             delegate: poolDelegate,
             idGenerator: .init(),
             backgroundActivityLogger: .init(label: "test")
@@ -352,12 +362,14 @@ class HTTPConnectionPoolTests: XCTestCase {
         let request = try! HTTPClient.Request(url: "http://localhost:\(httpBin.port)")
         let poolDelegate = TestDelegate(eventLoop: eventLoop)
 
+        var clientConfiguration = HTTPClient.Configuration()
+        clientConfiguration.httpVersion = .automatic
+
         let pool = HTTPConnectionPool(
             eventLoopGroup: eventLoopGroup,
             sslContextCache: .init(),
-            tlsConfiguration: .none,
-            clientConfiguration: .init(),
-            key: .init(request),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
             delegate: poolDelegate,
             idGenerator: .init(),
             backgroundActivityLogger: .init(label: "test")
@@ -406,12 +418,14 @@ class HTTPConnectionPoolTests: XCTestCase {
         let request = try! HTTPClient.Request(url: "http://localhost:\(httpBin.port)")
         let poolDelegate = TestDelegate(eventLoop: eventLoopGroup.next())
 
+        var clientConfiguration = HTTPClient.Configuration()
+        clientConfiguration.httpVersion = .automatic
+
         let pool = HTTPConnectionPool(
             eventLoopGroup: eventLoopGroup,
             sslContextCache: .init(),
-            tlsConfiguration: nil,
-            clientConfiguration: .init(),
-            key: .init(request),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
             delegate: poolDelegate,
             idGenerator: .init(),
             backgroundActivityLogger: logger

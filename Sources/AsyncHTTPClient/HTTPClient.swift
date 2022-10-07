@@ -687,7 +687,11 @@ public class HTTPClient {
                 }
             }
 
-            self.poolManager.executeRequest(requestBag)
+            self.poolManager.executeRequest(
+                requestBag,
+                key: .init(request: request, clientConfiguration: self.configuration),
+                configuration: .init(request: request, clientConfiguration: self.configuration)
+            )
         } catch {
             task.fail(with: error, delegateType: Delegate.self)
         }

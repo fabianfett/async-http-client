@@ -16,6 +16,7 @@
 import struct Foundation.URL
 import NIOCore
 import NIOHTTP1
+import NIOSSL
 
 @available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 extension HTTPClientRequest {

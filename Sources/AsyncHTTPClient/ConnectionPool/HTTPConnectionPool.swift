@@ -31,46 +31,44 @@ final class HTTPConnectionPool {
     /// The request connection timeout timers. Protected by the stateLock
     private var _requestTimer = [Request.ID: Scheduled<Void>]()
 
-    private static let fallbackConnectTimeout: TimeAmount = .seconds(30)
+    static let fallbackConnectTimeout: TimeAmount = .seconds(30)
 
-    let key: ConnectionPool.Key
+    let key: Key
 
     private var logger: Logger
 
     private let eventLoopGroup: EventLoopGroup
     private let connectionFactory: ConnectionFactory
-    private let clientConfiguration: HTTPClient.Configuration
+    private let configuration: Configuration
     private let idleConnectionTimeout: TimeAmount
 
     let delegate: HTTPConnectionPoolDelegate
 
     init(eventLoopGroup: EventLoopGroup,
          sslContextCache: SSLContextCache,
-         tlsConfiguration: TLSConfiguration?,
-         clientConfiguration: HTTPClient.Configuration,
-         key: ConnectionPool.Key,
+         configuration: Configuration,
+         key: Key,
          delegate: HTTPConnectionPoolDelegate,
          idGenerator: Connection.ID.Generator,
          backgroundActivityLogger logger: Logger) {
         self.eventLoopGroup = eventLoopGroup
         self.connectionFactory = ConnectionFactory(
             key: key,
-            tlsConfiguration: tlsConfiguration,
-            clientConfiguration: clientConfiguration,
+            configuration: configuration,
             sslContextCache: sslContextCache
         )
-        self.clientConfiguration = clientConfiguration
+        self.configuration = configuration
         self.key = key
         self.delegate = delegate
         var logger = logger
         logger[metadataKey: "ahc-pool-key"] = "\(key)"
         self.logger = logger
 
-        self.idleConnectionTimeout = clientConfiguration.connectionPool.idleTimeout
+        self.idleConnectionTimeout = self.configuration.idleTimeout
 
         self._state = StateMachine(
             idGenerator: idGenerator,
-            maximumConcurrentHTTP1Connections: clientConfiguration.connectionPool.concurrentHTTP1ConnectionsPerHostSoftLimit
+            maximumConcurrentHTTP1Connections: self.configuration.concurrentHTTP1ConnectionsPerHostSoftLimit
         )
     }
 
@@ -336,7 +334,7 @@ final class HTTPConnectionPool {
             connectionID: connectionID,
             http1ConnectionDelegate: self,
             http2ConnectionDelegate: self,
-            deadline: .now() + (self.clientConfiguration.timeout.connect ?? Self.fallbackConnectTimeout),
+            deadline: .now() + self.configuration.connectTimeout,
             eventLoop: eventLoop,
             logger: self.logger
         )

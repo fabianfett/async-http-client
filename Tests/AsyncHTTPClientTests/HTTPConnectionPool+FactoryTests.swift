@@ -37,11 +37,13 @@ class HTTPConnectionPool_FactoryTests: XCTestCase {
         }
 
         let request = try! HTTPClient.Request(url: "https://apple.com")
+        let clientConfiguration = HTTPClient.Configuration(
+            proxy: .socksServer(host: "127.0.0.1", port: server!.localAddress!.port!)
+        )
 
         let factory = HTTPConnectionPool.ConnectionFactory(
-            key: .init(request),
-            tlsConfiguration: nil,
-            clientConfiguration: .init(proxy: .socksServer(host: "127.0.0.1", port: server!.localAddress!.port!)),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
             sslContextCache: .init()
         )
 
@@ -73,11 +75,13 @@ class HTTPConnectionPool_FactoryTests: XCTestCase {
         }
 
         let request = try! HTTPClient.Request(url: "https://apple.com")
+        let clientConfiguration = HTTPClient.Configuration(
+            proxy: .socksServer(host: "127.0.0.1", port: server!.localAddress!.port!)
+        )
 
         let factory = HTTPConnectionPool.ConnectionFactory(
-            key: .init(request),
-            tlsConfiguration: nil,
-            clientConfiguration: .init(proxy: .socksServer(host: "127.0.0.1", port: server!.localAddress!.port!)),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
             sslContextCache: .init()
         )
 
@@ -109,11 +113,13 @@ class HTTPConnectionPool_FactoryTests: XCTestCase {
         }
 
         let request = try! HTTPClient.Request(url: "https://localhost:\(server!.localAddress!.port!)")
+        let clientConfiguration = HTTPClient.Configuration(
+            proxy: .socksServer(host: "127.0.0.1", port: server!.localAddress!.port!)
+        )
 
         let factory = HTTPConnectionPool.ConnectionFactory(
-            key: .init(request),
-            tlsConfiguration: nil,
-            clientConfiguration: .init(proxy: .server(host: "127.0.0.1", port: server!.localAddress!.port!)),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
             sslContextCache: .init()
         )
 
@@ -148,10 +154,13 @@ class HTTPConnectionPool_FactoryTests: XCTestCase {
 
         var tlsConfig = TLSConfiguration.makeClientConfiguration()
         tlsConfig.certificateVerification = .none
+        let clientConfiguration = HTTPClient.Configuration(
+            tlsConfiguration: tlsConfig
+        )
+
         let factory = HTTPConnectionPool.ConnectionFactory(
-            key: .init(request),
-            tlsConfiguration: nil,
-            clientConfiguration: .init(tlsConfiguration: tlsConfig),
+            key: .init(request: request, clientConfiguration: clientConfiguration),
+            configuration: .init(request: request, clientConfiguration: clientConfiguration),
             sslContextCache: .init()
         )
 
